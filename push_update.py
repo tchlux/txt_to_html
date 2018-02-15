@@ -118,7 +118,7 @@ if __name__ == "__main__":
         #      Upload to github with version tag     
         # ===========================================
         run(["git", "tag", "-a", version, "-m", notes])
-        run(["git", "push", "--tags"])
+        run(["git", "push", "--tags", package])
 
     if PYPI_BUILD:
         #      Setup the python package as a universal wheel     
