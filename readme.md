@@ -37,6 +37,7 @@
 |-----------------------|-----------------------|
 | 0.0.0<br>February 2018 | Created a parser that produces Distill formatted <br> HTML files from TXT files with markdown style <br> syntax. |
 | 0.0.0<br>February 2018 | Created a parser that produces Distill formatted <br> HTML files from TXT files with markdown style <br> syntax. |
+| 0.0.1<br>February 2018 | Created a parser that produces Distill formatted <br> HTML files from TXT files with markdown style <br> syntax. |
 
 
 ## UPCOMING (checked means in development):
