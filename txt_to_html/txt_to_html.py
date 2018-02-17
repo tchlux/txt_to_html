@@ -261,6 +261,7 @@ NOTES = '''
 # ====================================================================
 
 ON_NEW_LINE = r"(\r\n|\r|\n)$"
+ESCAPE_CHAR = r"\\$"
 class IncompleteSyntax(Exception): pass
 
 # Class for defining a syntax in text.
@@ -271,6 +272,7 @@ class Syntax(list):
     grammar = []       # The grammar for processing this syntax (list of syntaxes)
     closed  = True     # True if this syntax must successfully end
     symmetric = False  # True if this syntax end must equal the start in length
+    escapable = False  # True if "ESCAPE_CHAR" can be uesd to escape this syntax
     line_start = False # True if this syntax must start on a new line
     
     # Function for handling unprocessed strings. If this syntax is
@@ -320,6 +322,8 @@ class Syntax(list):
         body = type(self)([""])
         body.match = start
         new_line = re.match(ON_NEW_LINE, start) != None
+        escaped = re.match(ESCAPE_CHAR, start) != None
+        if (escaped): start = start[:-1]
         # Initialize remaining length of string (>0 to allow matching "")
         remaining = max(1, len(string))
         # Search the string for the start and end of this syntax
@@ -334,6 +338,7 @@ class Syntax(list):
             for syntax in self.grammar:
                 # Skip syntax that requires being at the start of a new line
                 if (syntax.line_start and (not new_line)): continue
+                if (syntax.escapable  and (escaped)): continue
                 # Search for the syntax at this part of the string
                 found, syntax_start = syntax.starts(string)
                 if found:
@@ -344,6 +349,8 @@ class Syntax(list):
                     # Record whether or not we are currently on a new line
                     new_line = re.match(ON_NEW_LINE, ends_on) != None
                     new_line = new_line or (type(body[-1]) == NewLine)
+                    # Record whether or not trailing character was ESCAPE_CHAR
+                    escaped = re.match(ESCAPE_CHAR, ends_on) != None
                     break
             else:
                 # Add string contents appropriately
@@ -353,6 +360,9 @@ class Syntax(list):
                     body[-1] += string[0]
                 # Record whether or not we are currently on a new line
                 new_line = re.match(ON_NEW_LINE, string[0]) != None
+                # Record whether or not we are currently escaping
+                escaped = re.match(ESCAPE_CHAR, string[0]) != None
+                if (escaped): body[-1] = body[-1][:-1]
                 # Transition string forward by one character
                 string = string[1:]
             # Update the stopping condition check
@@ -422,6 +432,7 @@ class Math(Syntax):
     start = r"^\$+"
     end   = r"^\$+"
     symmetric = True
+    escapable = True
 
     def pack(self, text):
         if len(self.match) == 1:
@@ -455,6 +466,7 @@ class Emphasis(Syntax):
     start = r"^\*+"
     end   = r"^\*+"
     symmetric = True
+    escapable = True
     grammar = BASE_GRAMMAR
 
     def pack(self, text):
@@ -478,6 +490,7 @@ class Header(Syntax):
     start = r"^#+"
     end   = r"^(\r\n|\r|\n)"
     grammar = BASE_GRAMMAR
+    escapable = True
     line_start = True
 
     def pack(self, text):
@@ -519,6 +532,7 @@ class TableEntry(Syntax):
     start = r"^\|"
     end   = r"^(\||\r\n|\r|\n)"
     grammar = TABLE_GRAMMAR
+    escapable = True
 
     # If there were no contents, then assume this was the last on the line
     def pack(self, text):
