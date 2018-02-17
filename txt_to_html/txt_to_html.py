@@ -262,6 +262,7 @@ NOTES = '''
 
 ON_NEW_LINE = r"(\r\n|\r|\n)$"
 ESCAPE_CHAR = r"\\$"
+SPECIAL_HTML_CHARS = {"<":"&lt;", ">":"&gt;"}
 class IncompleteSyntax(Exception): pass
 
 # Class for defining a syntax in text.
@@ -367,6 +368,9 @@ class Syntax(list):
                     escaped = (re.match(ESCAPE_CHAR, string[0]) != None) and self.allow_escape
                     if (escaped): body[-1] = body[-1][:-1]
                 else: 
+                    # Check for special HTML characters that need substitution
+                    if (string[0] in SPECIAL_HTML_CHARS):
+                        body[-1] = body[-1][:-1] + SPECIAL_HTML_CHARS[string[0]]
                     # Otherwise, reset the current escaped status
                     escaped = False
                 # Transition string forward by one character
@@ -483,6 +487,8 @@ class Emphasis(Syntax):
             return "<b>" + text + "</b>"
         elif len(self.match) == 3:
             return "<b><i>" + text + "</i></b>"
+        elif len(self.match) == 4:
+            return "<text style='color: #aaa; font-family: monospace;'>" + text + "</text>"
         else:
             return text
 
@@ -492,6 +498,14 @@ class NewLine(Syntax):
 
     def pack(self, text):
         return "\n" + text
+
+class Ignore(Syntax):
+    start = r"^%%"
+    end   = r"^(\r\n|\r|\n)"
+    escapable = True
+    line_start = True
+
+    def pack(self, text): return ""
 
 class Header(Syntax):
     start = r"^#+"
@@ -572,9 +586,9 @@ class Bibliography(Syntax):
         return begin + text + end
 
 
-BASE_GRAMMAR += [Math(), Emphasis(), Note(), Ref(), Subtext()]
+BASE_GRAMMAR += [Math(), Emphasis(), Note(), Ref(), Subtext(), Ignore()]
 TABLE_GRAMMAR += BASE_GRAMMAR + [Divider(), TableEntry()]
-ALL_GRAMMAR = [NewLine(), Divider(), Header(), Bibliography(),] \
+ALL_GRAMMAR = [NewLine(), Divider(), Header(), Bibliography()] \
               + BASE_GRAMMAR + [UnorderedElement(), OrderedElement(), TableEntry()]
 
 # ====================================================================
