@@ -266,14 +266,15 @@ class IncompleteSyntax(Exception): pass
 
 # Class for defining a syntax in text.
 class Syntax(list):
-    start   = r"^$"    # The regex matching the start of this syntax
-    end     = r"^$"    # The regex matching the end of this syntax
-    match   = ""       # The string matched when this Syntax started
-    grammar = []       # The grammar for processing this syntax (list of syntaxes)
-    closed  = True     # True if this syntax must successfully end
-    symmetric = False  # True if this syntax end must equal the start in length
-    escapable = False  # True if "ESCAPE_CHAR" can be uesd to escape this syntax
-    line_start = False # True if this syntax must start on a new line
+    start   = r"^$"     # The regex matching the start of this syntax
+    end     = r"^$"     # The regex matching the end of this syntax
+    match   = ""        # The string matched when this Syntax started
+    grammar = []        # The grammar for processing this syntax (list of syntaxes)
+    closed  = True      # True if this syntax must successfully end
+    symmetric = False   # True if this syntax end must equal the start in length
+    escapable = False   # True if "ESCAPE_CHAR" can be uesd to escape this syntax
+    line_start = False  # True if this syntax must start on a new line
+    allow_escape = True # True if escape characters are allowed in this syntax
     
     # Function for handling unprocessed strings. If this syntax is
     # closed then an error is raised, otherwise the body is returned.
@@ -322,7 +323,7 @@ class Syntax(list):
         body = type(self)([""])
         body.match = start
         new_line = re.match(ON_NEW_LINE, start) != None
-        escaped = re.match(ESCAPE_CHAR, start) != None
+        escaped = (re.match(ESCAPE_CHAR, start) != None) and self.allow_escape
         if (escaped): start = start[:-1]
         # Initialize remaining length of string (>0 to allow matching "")
         remaining = max(1, len(string))
@@ -350,7 +351,7 @@ class Syntax(list):
                     new_line = re.match(ON_NEW_LINE, ends_on) != None
                     new_line = new_line or (type(body[-1]) == NewLine)
                     # Record whether or not trailing character was ESCAPE_CHAR
-                    escaped = re.match(ESCAPE_CHAR, ends_on) != None
+                    escaped = (re.match(ESCAPE_CHAR, ends_on) != None) and self.allow_escape
                     break
             else:
                 # Add string contents appropriately
@@ -360,9 +361,14 @@ class Syntax(list):
                     body[-1] += string[0]
                 # Record whether or not we are currently on a new line
                 new_line = re.match(ON_NEW_LINE, string[0]) != None
-                # Record whether or not we are currently escaping
-                escaped = re.match(ESCAPE_CHAR, string[0]) != None
-                if (escaped): body[-1] = body[-1][:-1]
+                # Allow for the escaping of the escape character
+                if not escaped:
+                    # Record whether or not we are currently escaping
+                    escaped = (re.match(ESCAPE_CHAR, string[0]) != None) and self.allow_escape
+                    if (escaped): body[-1] = body[-1][:-1]
+                else: 
+                    # Otherwise, reset the current escaped status
+                    escaped = False
                 # Transition string forward by one character
                 string = string[1:]
             # Update the stopping condition check
@@ -433,6 +439,7 @@ class Math(Syntax):
     end   = r"^\$+"
     symmetric = True
     escapable = True
+    allow_escape = False
 
     def pack(self, text):
         if len(self.match) == 1:
