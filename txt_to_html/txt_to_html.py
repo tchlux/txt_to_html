@@ -10,7 +10,8 @@
 #   "|" ---------------> table entries
 #   "----(-)*" --------> divider
 #   "====(=)*" --------> marks the rest of the document as a bibtex bibliography
-#   "!+" --------------> New Title
+#   "!+" --------------> new title
+#   "{{<path>}}" ------> include external file, supports [.png, .jpeg, .jpg, .html]
 # 
 # ANYWHERE:
 #   "((<footnote>))" --> footnote in line (will be in appendix as well)
@@ -21,8 +22,6 @@
 #   "**<text>**" ------> bold
 # 
 # TODO:  Make a syntax for providing links (to inside document and out) @@<text>
-# TODO:  Make a syntax for including local image files                  {{}}
-# TODO:  Make a syntax for including local HTML files                   {{}}
 # TODO:  Make a syntax for setting attributes of objects                <<>>
 # TODO:  Not having an extra newline after ordered list causes
 #        incorrect parse (line without paragraph wrapper).
@@ -91,19 +90,11 @@ def HTML(use_local=USE_LOCAL, resource_folder=RESOURCE_FOLDER):
     {local_start} <script type="text/javascript" async src="{resource_folder}/MathJax-2.7.2/MathJax.js?config=TeX-AMS-MML_HTMLorMML,local/local"></script> {local_end}
     '''.format(**source_format)
 
-    # Source files for w3 (include HTML files)
-    w3_source = '''
-    <!-- w3 "include html" javascript code for inserting html -->
-    {online_start} {online_end}
-    {local_start} <script src="{resource_folder}/w3.js"></script> {local_end}
-    '''.format(**source_format)
-
     # Default HTML
     html = '''
     <!doctype html>
     <meta charset="utf-8">
 
-    %s
     %s
     %s
 
@@ -155,7 +146,7 @@ def HTML(use_local=USE_LOCAL, resource_folder=RESOURCE_FOLDER):
     {bibliography}
 
     {notes}
-    '''%(distill_source, mathjax_source, w3_source)
+    '''%(distill_source, mathjax_source)
 
     return html
 
@@ -309,6 +300,8 @@ ON_NEW_LINE = r"(\r\n|\r|\n)$"
 ESCAPE_CHAR = r"\\$"
 SPECIAL_HTML_CHARS = {"<":"&lt;", ">":"&gt;"}
 class IncompleteSyntax(Exception): pass
+class UnsupportedExtension(Exception): pass
+class MissingFile(Exception): pass
 
 # Class for defining a syntax in text.
 class Syntax(list):
@@ -518,13 +511,20 @@ class Ref(Syntax):
         else:
             return text
 
-class Image(Syntax):
+class External(Syntax):
     start = r"{{"
     end   = r"}}"
+    line_start = True
     symmetric = True
     
-    def pack(self, img_path):
-        return f"<img src='{img_path}' width='90%' style='margin: 20px; display: inline-block;'>"
+    def pack(self, path):
+        extension = path[-path[::-1].find("."):]
+        if extension in {"png","jpg","jpeg"}:
+            return f"<img src='{path}' width='90%' style='margin: 20px; display: inline-block;'>"
+        elif extension in {"html"}:
+            return f"<iframe src='{path}' frameBorder='0' style='width:100%; height:60vh; margin: -20px'></iframe>"
+        else:
+            raise(UnsupportedExtension(f"External files with extension '{extension}' are not supported."))
 
 class Spacer(Syntax):
     start = r"^<[0-9]+>"
@@ -674,10 +674,11 @@ class TableEntry(Syntax):
     
 
 BASE_GRAMMAR += [Math(), Emphasis(), Note(), Ref(), Subtext(),
-                 Ignore(), Image(), Spacer()]
+                 Ignore(), Spacer()]
 TABLE_GRAMMAR += BASE_GRAMMAR + [Divider(), TableEntry()]
-ALL_GRAMMAR = [NewLine(), Divider(), Header(), Title(), Bibliography()] \
-              + BASE_GRAMMAR + [UnorderedElement(), OrderedElement(), TableEntry()]
+ALL_GRAMMAR = [NewLine(), Divider(), Header(), Title(),
+               Bibliography(), External(), UnorderedElement(),
+               OrderedElement(), TableEntry()] + BASE_GRAMMAR
 
 # ====================================================================
 #                  Definition of Blocks of Syntaxes                   
