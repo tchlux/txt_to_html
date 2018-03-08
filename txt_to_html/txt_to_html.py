@@ -10,6 +10,7 @@
 #   "|" ---------------> table entries
 #   "----(-)*" --------> divider
 #   "====(=)*" --------> marks the rest of the document as a bibtex bibliography
+#   "!+" --------------> New Title
 # 
 # ANYWHERE:
 #   "((<footnote>))" --> footnote in line (will be in appendix as well)
@@ -20,10 +21,11 @@
 #   "**<text>**" ------> bold
 # 
 # TODO:  Make a syntax for providing links (to inside document and out) @@<text>
-# TODO:  Make a syntax for adding horzontal space (for tables)          <->
 # TODO:  Make a syntax for including local image files                  {{}}
 # TODO:  Make a syntax for including local HTML files                   {{}}
 # TODO:  Make a syntax for setting attributes of objects                <<>>
+# TODO:  Not having an extra newline after ordered list causes
+#        incorrect parse (line without paragraph wrapper).
 
 import os, re
 
@@ -32,11 +34,12 @@ TITLE = "Notes"
 DESCRIPTION = ""
 AA_BEGIN = "   - "
 AUTHORS_AND_AFFILIATION = [
-    ("Thomas Lux: https://www.linkedin.com/in/thomas-ch-lux", 
-     "thomas.ch.lux@gmail.com"),
+    # ("Thomas Lux: https://www.linkedin.com/in/thomas-ch-lux", 
+    #  "thomas.ch.lux@gmail.com"),
 ]
 RESOURCE_FOLDER = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),"resources")
+USE_LOCAL = True
 
 # Format the author and affiliation block appropriately, return in
 # dictionary to be used as the **kwargs of formatting HTML.
@@ -48,74 +51,114 @@ def FORMAT_AUTHORS():
         affils += AA_BEGIN + aff + "\n"
     return dict([("authors",authors), ("affiliations",affils)])
 
+# Default bibliography block
 BIBLIOGRAPHY = '''
 <script type="text/bibliography">
 </script>
 '''
 
+# Default appendix block
 APPENDIX = '''
 <dt-appendix>
 </dt-appendix>
 '''
 
-HTML = '''
-<!doctype html>
-<meta charset="utf-8">
-<!-- <script src="https://distill.pub/template.v1.js"></script> -->
-<script src="{resource_folder}/distill.template.v1.no-banner.js"></script>
-<!-- Include MathJax -->
-<script type="text/javascript" async src="{resource_folder}/MathJax-2.7.2/MathJax.js?config=TeX-AMS-MML_HTMLorMML,local/local"></script>
-<!-- w3 "include html" javascript code for inserting html -->
-<script src="{resource_folder}/w3.js"></script>
-<!-- Script for setting up the author block -->
-<script type="text/front-matter">
-  title: {title}
-  description: {description}
-  authors:
-{authors}
-  affiliations:
-{affiliations}
-</script>
+def HTML(use_local=USE_LOCAL, resource_folder=RESOURCE_FOLDER):
+    print("Formatting HTML %susing local files and resources."%(
+        "" if use_local else "not "))
 
-<style type="text/css">
-  dt-article ol, dt-article ul {{
-    padding-left: 50px;
-  }}
+    # Decide which HTML sources to use based on "local" or "not local".
+    source_format = dict(
+        local_start     = ""     if use_local else "<!--",
+        local_end       = ""     if use_local else "-->",
+        online_start    = "<!--" if use_local else "",
+        online_end      = "-->"  if use_local else "",
+        resource_folder = resource_folder,
+    )
 
-  dt-article ul {{
-    list-style: none;
-  }}
+    # Source files for distill
+    distill_source = '''
+    <!-- Include Distill -->
+    <!-- <script src="https://distill.pub/template.v1.js"></script> -->
+    {online_start} <script src="http://people.cs.vt.edu/tchlux/distill.template.v1.no-banner.js"></script> {online_end}
+    {local_start} <script src="{resource_folder}/distill.template.v1.no-banner.js"></script> {local_end}
+    '''.format(**source_format)
 
-  dt-article li {{
-    margin-bottom: 10px;
-  }}
+    # Source files for mathjax
+    mathjax_source = '''
+    <!-- Include MathJax -->
+    {online_start} <script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.2/MathJax.js?config=TeX-MML-AM_CHTML"> </script> {online_end}
+    {local_start} <script type="text/javascript" async src="{resource_folder}/MathJax-2.7.2/MathJax.js?config=TeX-AMS-MML_HTMLorMML,local/local"></script> {local_end}
+    '''.format(**source_format)
 
-  ul li:before {{
-    content: "–  ";
-    margin-left: -1em
-  }}
+    # Source files for w3 (include HTML files)
+    w3_source = '''
+    <!-- w3 "include html" javascript code for inserting html -->
+    {online_start} {online_end}
+    {local_start} <script src="{resource_folder}/w3.js"></script> {local_end}
+    '''.format(**source_format)
 
-  td {{
-    padding-left: 10px !important;
-    padding-right: 10px !important;
-  }}
-</style>
+    # Default HTML
+    html = '''
+    <!doctype html>
+    <meta charset="utf-8">
 
-<dt-article>
-<h1>{title}</h1>
-<p>{description}</p>
-<dt-byline></dt-byline>
+    %s
+    %s
+    %s
 
-{body}
+    <!-- Script for setting up the author block -->
+    <script type="text/front-matter">
+      title: {frontmatter_title}
+      description: {frontmatter_description}
+      authors:
+    {authors}
+      affiliations:
+    {affiliations}
+    </script>
 
-</dt-article>
+    <style type="text/css">
+      dt-article ol, dt-article ul {{
+        padding-left: 50px;
+      }}
 
-{appendix}
+      dt-article ul {{
+        list-style: none;
+      }}
 
-{bibliography}
+      dt-article li {{
+        margin-bottom: 10px;
+      }}
 
-{notes}
-'''
+      ul li:before {{
+        content: "–  ";
+        margin-left: -1em
+      }}
+
+      td {{
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+      }}
+    </style>
+
+    <dt-article>
+    <h1>{title}</h1>
+    <p>{description}</p>
+    <dt-byline></dt-byline>
+
+    {body}
+
+    </dt-article>
+
+    {appendix}
+
+    {bibliography}
+
+    {notes}
+    '''%(distill_source, mathjax_source, w3_source)
+
+    return html
+
 
 NOTES = '''
 <!--
@@ -251,8 +294,10 @@ NOTES = '''
 
 # Example of how to format the HTML document
 # 
-# HTML.format( title="", description="", authors="", affiliations="", 
-#              body="", bibliography="", appendix="", notes="", resource_folder=""  )
+# HTML().format( frontmatter_title="", frontmatter_description, 
+#                title="", description="", authors="", 
+#                affiliations="", body="", bibliography="", 
+#                appendix="", notes="")
 
 # Object oriented recursive tree-grammar parsing code
 
@@ -276,6 +321,7 @@ class Syntax(list):
     escapable = False   # True if "ESCAPE_CHAR" can be uesd to escape this syntax
     line_start = False  # True if this syntax must start on a new line
     allow_escape = True # True if escape characters are allowed in this syntax
+    return_end = True   # True if the "end" regular expression should be returned
     
     # Function for handling unprocessed strings. If this syntax is
     # closed then an error is raised, otherwise the body is returned.
@@ -311,11 +357,15 @@ class Syntax(list):
     def ends(self, string, start):
         match = re.match(self.end, string)
         if match:
-            if self.symmetric: 
-                if (len(start) == len(match.group())): return True, start
-                else:                                  return False, ""
-            else:                                    return True, match.group()
-        else:                                      return False, ""
+            if self.symmetric:
+                if (len(start) == len(match.group())): 
+                    return True, (start if self.return_end else "")
+                else:
+                    return False, ""
+            else:
+                return True, (match.group() if self.return_end else "")
+        else:
+            return False, ""
 
     # Recursive function for processing a string into a Syntax heirarchy.
     def process(self, string, start="", spacing="", verbose=False):
@@ -368,11 +418,12 @@ class Syntax(list):
                     escaped = (re.match(ESCAPE_CHAR, string[0]) != None) and self.allow_escape
                     if (escaped): body[-1] = body[-1][:-1]
                 else: 
-                    # Check for special HTML characters that need substitution
-                    if (string[0] in SPECIAL_HTML_CHARS):
-                        body[-1] = body[-1][:-1] + SPECIAL_HTML_CHARS[string[0]]
                     # Otherwise, reset the current escaped status
                     escaped = False
+                    # Check for special HTML characters that need to be
+                    # automatically escaped (if escaping is allowed)
+                    if (string[0] in SPECIAL_HTML_CHARS):
+                        body[-1] = body[-1][:-1] + SPECIAL_HTML_CHARS[string[0]]
                 # Transition string forward by one character
                 string = string[1:]
             # Update the stopping condition check
@@ -409,12 +460,13 @@ class Block:
                     text += rendered_text
                     break
             else:
+                recognized_syntax = (type(body[0]) in self.syntax)
+                no_requirement_exists = (str(type(body[0])) not in self.requirements)
+                requirement_met = no_requirement_exists or self.requirements[str(type(body[0]))](body[0])
                 # If (this syntax is recognized) AND
                 #     (there is not a requirement for the syntax) OR
                 #     (the requirement for this syntax is met)
-                if (type(body[0]) in self.syntax) and \
-                   ((str(type(body[0])) not in self.requirements) or
-                    self.requirements[str(type(body[0]))](body[0])):
+                if recognized_syntax and requirement_met:
                     # Check to see if this is just a string
                     if type(body[0]) == str:
                         text += body.pop(0)
@@ -424,7 +476,10 @@ class Block:
                 else:
                     # This syntax is not accepted by this block
                     if verbose: 
-                        print(spacing, "End (unfinished)", type(self), type(body[0]), [text])
+                        print(spacing, "End (unfinished)", type(self),
+                              recognized_syntax, requirement_met, 
+                              [body[0].match if not requirement_met else ""], 
+                              type(body[0]), [text])
                     # There was no recognized block nor syntax, return body
                     return self.pack(text), body
         if verbose: print(spacing, "End (finished)", type(self), [text])
@@ -446,21 +501,11 @@ class Math(Syntax):
     allow_escape = False
 
     def pack(self, text):
+        # Pack with or without new line appropriately.
         if len(self.match) == 1:
             return "\(" + text + "\)"
         elif len(self.match) == 2:
             return "\n$$" + text + "$$"
-
-class Note(Syntax):
-    start = r"^\(\(+"
-    end   = r"^\)\)+"
-    symmetric = True
-
-    def pack(self, text):
-        if len(self.match) == 2:
-            return "<dt-fn>" + text + "</dt-fn>"
-        elif len(self.match) == 3:
-            return "("*len(self.match) + text + ")"*len(self.match)
 
 class Ref(Syntax):
     start = r"^\[\[+"
@@ -472,6 +517,69 @@ class Ref(Syntax):
             return "<dt-cite key=\"" + text + "\"></dt-cite>"
         else:
             return text
+
+class Image(Syntax):
+    start = r"{{"
+    end   = r"}}"
+    symmetric = True
+    
+    def pack(self, img_path):
+        return f"<img src='{img_path}' width='90%' style='margin: 20px; display: inline-block;'>"
+
+class Spacer(Syntax):
+    start = r"^<[0-9]+>"
+    end   = r"^(@EMPTY MATCH@)*"
+    escapable = True
+
+    def pack(self, text):
+        space_size = self.match[1:-1]
+        return "<div style='width: %spx;'>"%(space_size)
+
+class NewLine(Syntax):
+    start = r"^(\r\n|\r|\n)+"
+    end   = r"^(@EMPTY MATCH@)*"
+
+    def pack(self, text):
+        return "\n" + text
+
+class Ignore(Syntax):
+    start = r"^%%"
+    end   = r"^(\r\n|\r|\n)"
+    escapable = True
+    line_start = True
+
+    def pack(self, text): return ""
+
+class Divider(Syntax):
+    start = r"^(----)-*"
+    end   = r"^(\r\n|\r|\n)"
+    line_start = True
+    return_end = False
+
+    def pack(self, text):
+        return "\n<hr>"+text+"\n"
+
+class Bibliography(Syntax):
+    start = r"^(====)=*"
+    end = r"^$"
+    line_start = True
+
+    def pack(self, text):
+        begin = '<script type="text/bibliography">\n'
+        end = '\n</script>'
+        return begin + text + end
+
+class Note(Syntax):
+    start = r"^\(\(+"
+    end   = r"^\)\)+"
+    symmetric = True
+    grammar = BASE_GRAMMAR
+
+    def pack(self, text):
+        if len(self.match) == 2:
+            return "<dt-fn>" + text + "</dt-fn>"
+        elif len(self.match) == 3:
+            return "("*len(self.match) + text + ")"*len(self.match)
 
 class Emphasis(Syntax):
     start = r"^\*+"
@@ -492,20 +600,18 @@ class Emphasis(Syntax):
         else:
             return text
 
-class NewLine(Syntax):
-    start = r"^(\r\n|\r|\n)+"
-    end   = r"^(@EMPTY MATCH@)*"
-
-    def pack(self, text):
-        return "\n" + text
-
-class Ignore(Syntax):
-    start = r"^%%"
+class Title(Syntax):
+    start = r"^!+"
     end   = r"^(\r\n|\r|\n)"
+    grammar = BASE_GRAMMAR
     escapable = True
     line_start = True
+    return_end = False
 
-    def pack(self, text): return ""
+    def pack(self, text):
+        begin = "<h1>"
+        end   = "</h1>"
+        return begin + text + end
 
 class Header(Syntax):
     start = r"^#+"
@@ -524,9 +630,10 @@ class Subtext(Syntax):
     end   = r"^(\r\n|\r|\n)"
     grammar = BASE_GRAMMAR
     line_start = True
+    return_end = False
 
     def pack(self, text):
-        begin = "<p style='padding-left: %spx;'>"%(15*(len(self.match)))
+        begin = "<p style='padding-left: %spx; margin-top: 0px; margin-bottom: 0px;'>"%(15*(len(self.match)))
         end   = "</p>"
         return begin + text + end
 
@@ -535,6 +642,7 @@ class UnorderedElement(Syntax):
     end   = r"^(\r\n|\r|\n)"
     grammar = BASE_GRAMMAR
     line_start = True
+    return_end = False
 
     def pack(self, text):
         count = len(self.match) - 2
@@ -545,6 +653,7 @@ class OrderedElement(Syntax):
     end   = r"^(\r\n|\r|\n)"
     grammar = BASE_GRAMMAR
     line_start = True
+    return_end = False
 
     def pack(self, text):
         return "<li>"+ text +"</li>"
@@ -554,6 +663,7 @@ class TableEntry(Syntax):
     end   = r"^(\||\r\n|\r|\n)"
     grammar = TABLE_GRAMMAR
     escapable = True
+    return_end = False
 
     # If there were no contents, then assume this was the last on the line
     def pack(self, text):
@@ -561,34 +671,12 @@ class TableEntry(Syntax):
             return "<td>" + text + "</td>"
         else:
             return ""
-
-    # Overwrite the ends function to pretend like it didn't see the close
-    def ends(self, *args, **kwargs):
-        found, end = super().ends(*args, **kwargs)
-        return found, ""
     
-class Divider(Syntax):
-    start = r"^(----)-*"
-    end   = r"^(\r\n|\r|\n)"
-    line_start = True
 
-    def pack(self, text):
-        return "\n<hr>"+text+"\n"
-
-class Bibliography(Syntax):
-    start = r"^(====)=*"
-    end = r"^$"
-    line_start = True
-
-    def pack(self, text):
-        begin = '<script type="text/bibliography">\n'
-        end = '\n</script>'
-        return begin + text + end
-
-
-BASE_GRAMMAR += [Math(), Emphasis(), Note(), Ref(), Subtext(), Ignore()]
+BASE_GRAMMAR += [Math(), Emphasis(), Note(), Ref(), Subtext(),
+                 Ignore(), Image(), Spacer()]
 TABLE_GRAMMAR += BASE_GRAMMAR + [Divider(), TableEntry()]
-ALL_GRAMMAR = [NewLine(), Divider(), Header(), Bibliography()] \
+ALL_GRAMMAR = [NewLine(), Divider(), Header(), Title(), Bibliography()] \
               + BASE_GRAMMAR + [UnorderedElement(), OrderedElement(), TableEntry()]
 
 # ====================================================================
@@ -606,7 +694,7 @@ class Table(Block):
     after  = "</table>"
     start  = [TableEntry]
     blocks = [TableRow]
-    syntax = [Divider, NewLine]
+    syntax = [Divider, NewLine, Ignore]
     requirements = {str(NewLine):lambda nl: len(nl.match) == 1}
 
 class OrderedList(Block):
@@ -626,9 +714,9 @@ class UnorderedList(Block):
 class Paragraph(Block):
     before = "\n<p>"
     after  = "</p>"
-    start  = [str]+[type(s) for s in ALL_GRAMMAR if (type(s) not in [TableEntry,NewLine])]
+    start  = [str]+[type(s) for s in ALL_GRAMMAR if (type(s) not in [TableEntry,NewLine,Header])]
     blocks = [OrderedList, UnorderedList]
-    syntax = [str]+[type(s) for s in ALL_GRAMMAR]
+    syntax = [str]+[type(s) for s in ALL_GRAMMAR if (type(s) not in [Header])]
     requirements = {str(NewLine):lambda nl: len(nl.match) == 1}
 
 class Body(Block):
@@ -641,24 +729,28 @@ class Body(Block):
 
 # Given a path to a text file, process that text file into an HTML
 # document format.
-def parse_txt(path_name, output_folder='', verbose=True):
+def parse_txt(path_name, output_folder='', verbose=True,
+              use_local=USE_LOCAL, resource_folder=RESOURCE_FOLDER):
     if verbose: print("Processing '%s'..."%path_name)
     with open(path_name) as f:
         raw_lines = f.readlines()
     if len(raw_lines) == 0: return ""
     if verbose: print("Read text with %i lines."%len(raw_lines))
     # Initialize the document build keyword arguments
-    html_kwargs = {"title":TITLE, "description":DESCRIPTION,
+    html_kwargs = {"frontmatter_title":TITLE, "frontmatter_description":DESCRIPTION,
+                   "title":TITLE, "description":DESCRIPTION,
                    "bibliography":BIBLIOGRAPHY, "appendix":APPENDIX,
-                   "notes":NOTES, "resource_folder":RESOURCE_FOLDER}
+                   "notes":NOTES}
     # Add the formatted author block
     html_kwargs.update(FORMAT_AUTHORS())
     # If there is a title on the first line, use it
     if (len(raw_lines) > 0) and (len(raw_lines[0]) > 0):
         html_kwargs["title"] = raw_lines.pop(0).strip()
+        html_kwargs["frontmatter_title"] = html_kwargs["title"].replace(":","")
     # If there is a description on the second line, use it
     if (len(raw_lines) > 0) and (len(raw_lines[0]) > 0):
         html_kwargs["description"] = raw_lines.pop(0).strip()
+        html_kwargs["frontmatter_description"] = html_kwargs["description"].replace(":","-")
     if (len(raw_lines) > 0) and (len(raw_lines[0]) == 0): raw_lines.pop(0)
     # ================================================================
     # Initialize a syntax processor that does not have to close and
@@ -667,7 +759,7 @@ def parse_txt(path_name, output_folder='', verbose=True):
     processor.closed = False
     processor.grammar = ALL_GRAMMAR
     # Process the text into a heirarchical syntax format
-    body, _, _ = processor.process("\n".join(raw_lines))
+    body, _, _ = processor.process("".join(raw_lines))
     # Check for a bibliography at the end of the body
     if type(body[-1]) == Bibliography:
         html_kwargs["bibliography"] = body.pop(-1).render()
@@ -677,9 +769,10 @@ def parse_txt(path_name, output_folder='', verbose=True):
     # Save the HTML document locally
     file_name = os.path.basename(path_name)
     output_file = os.path.join(output_folder, file_name + ".html")
-    html = HTML.format( **html_kwargs )
+    html = HTML(use_local, resource_folder).format( **html_kwargs )
     with open(output_file, "w") as f:
         print(html, file=f)
     if verbose: print("Saved output in '%s'."%output_file)
     # Return the HTML document (using formatted kwargs to insert text)
-    return HTML.format( **html_kwargs )
+    return html
+
