@@ -31,11 +31,13 @@ import os, re
 OUTPUT_DIR = os.path.dirname(os.path.abspath(__file__))
 TITLE = "Notes"
 DESCRIPTION = ""
-AA_BEGIN = "   - "
+AA_BEGIN = "       - "
 AUTHORS_AND_AFFILIATION = [
-    # ("Thomas Lux: https://www.linkedin.com/in/thomas-ch-lux", 
-    #  "thomas.ch.lux@gmail.com"),
+    # ("Thomas Lux: https://www.linkedin.com/in/thomas-ch-lux", "thomas.ch.lux@gmail.com"),
+    ("Thomas Lux: people.cs.vt.edu/~tchlux/", "tchlux@vt.edu"),
+    ("Tyler Chang: people.cs.vt.edu/~thchang/", "thchang@vt.edu"),
 ]
+
 RESOURCE_FOLDER = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),"resources")
 USE_LOCAL = True
@@ -103,9 +105,9 @@ def HTML(use_local=USE_LOCAL, resource_folder=RESOURCE_FOLDER):
       title: {frontmatter_title}
       description: {frontmatter_description}
       authors:
-    {authors}
+{authors}
       affiliations:
-    {affiliations}
+{affiliations}
     </script>
 
     <style type="text/css">
@@ -522,7 +524,42 @@ class External(Syntax):
         if extension in {"png","jpg","jpeg"}:
             return f"<img src='{path}' width='90%' style='margin: 20px; display: inline-block;'>"
         elif extension in {"html"}:
-            return f"<iframe src='{path}' frameBorder='0' style='width:100%; height:60vh; margin: -20px'></iframe>"
+            # Try and read the best size for the iframe from the file.
+            if os.path.exists(path):
+                with open(path) as f:
+                    contents = f.read()
+                    # Get the 'style' declaration of the first div
+                    contents = contents[contents.find("<div"):]
+                    contents = contents[contents.find("style="):]
+                    # Strip everything after the style declaration
+                    contents = contents[:contents.find("class=")]
+                    # Get the contents of the style declaration
+                    contents = contents[contents.find('"')+1:]
+                    contents = contents[:contents.find('"')]
+                    # Set the default width and height, but check for declared
+                    height = "60vh"
+                    width = "70vw"
+                    if ("height" in contents):
+                        # Retreive the height from the style
+                        new_height = contents[contents.index("height:") + len("height:"):]
+                        new_height = new_height[:new_height.index(";")]
+                        # If it's in pixels, add a 20 pixel pad
+                        if ("px" in new_height):
+                            new_height = new_height.replace("px","")
+                            height = str(int(new_height) + 20) + "px"
+                        # Otherwise, use the default height
+                    if ("width" in contents):
+                        # Retreive the width from the style
+                        new_width = contents[contents.index("width:") + len("width:"):]
+                        new_width = new_width[:new_width.index(";")]
+                        # If it's in pixels, add a 10 pixel pad
+                        if ("px" in new_width):
+                            new_width = new_width.replace("px","")
+                            width = str(int(new_width) + 10) + "px"
+                        # Otherwise, use the default width
+                    iframe_style = f"height: {height}; width: {width};"
+                    print(f" adding plot style to external HTML: '{iframe_style}'")
+            return f"<iframe src='{path}' frameBorder='0' style='{iframe_style}'></iframe>"
         else:
             raise(UnsupportedExtension(f"External files with extension '{extension}' are not supported."))
 
