@@ -12,6 +12,7 @@
 #   "====(=)*" --------> marks the rest of the document as a bibtex bibliography
 #   "!+" --------------> new title
 #   "{{<path>}}" ------> include external file, supports [.png, .jpeg, .jpg, .html]
+#   "%%+" -------------> ignore rest of line (comments in file)
 # 
 # ANYWHERE:
 #   "((<footnote>))" --> footnote in line (will be in appendix as well)
@@ -20,9 +21,13 @@
 #   "$$<math>$$" ------> new line (centered) math
 #   "*<text>*" --------> italics
 #   "**<text>**" ------> bold
+#   "@@<header>@@" ----> links in document to that header (verbatim name)
+#   "<< modifier >>" --> direct access to html parent element attribute settings
+#   "<(0-9)+>" --------> spacer with specified pixel width
+#   "@{text}{link}@" --> text with a hyperlink
 # 
-# TODO:  Make a syntax for providing links (to inside document and out) @@<text>
-# TODO:  Make a syntax for setting attributes of objects                <<>>
+# 
+# TODO:  Make a syntax for inserting python code                ****
 # TODO:  Not having an extra newline after ordered list causes
 #        incorrect parse (line without paragraph wrapper).
 
@@ -33,9 +38,9 @@ TITLE = "Notes"
 DESCRIPTION = ""
 AA_BEGIN = "       - "
 AUTHORS_AND_AFFILIATION = [
-    # ("Thomas Lux: https://www.linkedin.com/in/thomas-ch-lux", "thomas.ch.lux@gmail.com"),
-    ("Thomas Lux: people.cs.vt.edu/~tchlux/", "tchlux@vt.edu"),
-    ("Tyler Chang: people.cs.vt.edu/~thchang/", "thchang@vt.edu"),
+    ("Thomas Lux: https://www.linkedin.com/in/thomas-ch-lux", "thomas.ch.lux@gmail.com"),
+    # ("Thomas Lux: http://people.cs.vt.edu/~tchlux/", "tchlux@vt.edu"),
+    # ("Tyler Chang: http://people.cs.vt.edu/~thchang/", "thchang@vt.edu"),
 ]
 
 RESOURCE_FOLDER = os.path.join(
@@ -50,7 +55,7 @@ def FORMAT_AUTHORS():
     for auth, aff in AUTHORS_AND_AFFILIATION:
         authors += AA_BEGIN + auth + "\n"
         affils += AA_BEGIN + aff + "\n"
-    return dict([("authors",authors), ("affiliations",affils)])
+    return dict(authors=authors, affiliations=affils)
 
 # Default bibliography block
 BIBLIOGRAPHY = '''
@@ -65,8 +70,7 @@ APPENDIX = '''
 '''
 
 def HTML(use_local=USE_LOCAL, resource_folder=RESOURCE_FOLDER):
-    print("Formatting HTML %susing local files and resources."%(
-        "" if use_local else "not "))
+    print(f"Formatting HTML {'' if use_local else 'not '}using local files and resources.")
 
     # Decide which HTML sources to use based on "local" or "not local".
     source_format = dict(
@@ -92,11 +96,24 @@ def HTML(use_local=USE_LOCAL, resource_folder=RESOURCE_FOLDER):
     {local_start} <script type="text/javascript" async src="{resource_folder}/MathJax-2.7.2/MathJax.js?config=TeX-AMS-MML_HTMLorMML,local/local"></script> {local_end}
     '''.format(**source_format)
 
+    # Source files for bootstrap
+    bootstrap_source = '''
+    <!-- Include bootstrap stylesheet -->>
+    {online_start} <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.0/css/bootstrap.min.css"> {online_end}
+    {online_start} <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script> {online_end}
+    {online_start} <script type="text/javascript" rel="stylesheet" src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.0/js/bootstrap.min.js"></script> {online_end}
+    <!-- Include bootstrap javascript (and dependency jquery) -->>
+    {local_start} <link rel="stylesheet" href="{resource_folder}/bootstrap.min.css"> {local_end}
+    {local_start} <script type="text/javascript" src="{resource_folder}/jquery.min.js"></script> {local_end}
+    {local_start} <script type="text/javascript" src="{resource_folder}/bootstrap.min.js"></script> {local_end}
+    '''.format(**source_format)
+
     # Default HTML
     html = '''
     <!doctype html>
     <meta charset="utf-8">
 
+    %s
     %s
     %s
 
@@ -148,7 +165,7 @@ def HTML(use_local=USE_LOCAL, resource_folder=RESOURCE_FOLDER):
     {bibliography}
 
     {notes}
-    '''%(distill_source, mathjax_source)
+    '''%(distill_source, mathjax_source, "") #bootstrap_source
 
     return html
 
@@ -301,9 +318,11 @@ NOTES = '''
 ON_NEW_LINE = r"(\r\n|\r|\n)$"
 ESCAPE_CHAR = r"\\$"
 SPECIAL_HTML_CHARS = {"<":"&lt;", ">":"&gt;"}
-class IncompleteSyntax(Exception): pass
 class UnsupportedExtension(Exception): pass
+class IncompleteSyntax(Exception): pass
 class MissingFile(Exception): pass
+class SyntaxError(Exception): pass
+class AuthorError(Exception): pass
 
 # Class for defining a syntax in text.
 class Syntax(list):
@@ -317,12 +336,13 @@ class Syntax(list):
     line_start = False  # True if this syntax must start on a new line
     allow_escape = True # True if escape characters are allowed in this syntax
     return_end = True   # True if the "end" regular expression should be returned
+    modifiable = False  # True if "Modifier" class content is allowed to update "pack"
     
     # Function for handling unprocessed strings. If this syntax is
     # closed then an error is raised, otherwise the body is returned.
     def not_closed(self, body):
         if self.closed:
-            raise(IncompleteSyntax(str(type(self)) +" "+ str(body)))
+            raise(IncompleteSyntax(f"\n\n  {str(type(self))} {str(body)}"))
         else:
             return body, "", ""
 
@@ -335,10 +355,17 @@ class Syntax(list):
     def render(self, spacing="", verbose=False):
         if verbose: print(spacing, "Rendering", type(self), [self.match])
         text = ""
+        modifier = ""
         for el in self:
-            if type(el) == str: text += el
-            else:               text += el.render(spacing+"  ", verbose)
-        return self.pack(text)
+            if type(el) == str:        text += el
+            elif type(el) == Modifier: modifier += el.render(spacing+"  ", verbose)
+            else:                      text += el.render(spacing+"  ", verbose)
+        # Pack the output, modify if that is allowed
+        output = self.pack(text)
+        if (self.modifiable and (len(modifier) > 0)):
+            # Add the modifier to the element
+            output = output.replace(">",f" {modifier}>",1)
+        return output
 
     # Returns the length of the match at the beginning of a string
     # that fits the "start" regular expression for this syntax.
@@ -488,6 +515,11 @@ BASE_GRAMMAR = []
 LIST_GRAMMAR = []
 TABLE_GRAMMAR = []
 
+class Modifier(Syntax):
+    start = r"^<<"
+    end   = r"^>>"
+    escapable = True
+
 class Math(Syntax):
     start = r"^\$+"
     end   = r"^\$+"
@@ -512,6 +544,32 @@ class Ref(Syntax):
             return "<dt-cite key=\"" + text + "\"></dt-cite>"
         else:
             return text
+
+class Jump(Syntax):
+    start = r"^@@"
+    end   = r"^@@"
+    escapable = True
+
+    def pack(self, text):
+        text = text.replace('"','\\"')
+        return f'<a href="#{text.replace(">","")}"><i>{text}</i></a>'
+        # return f'<a href="#{text}">Section \'<i>{text}</i>\'</a>'
+
+class Link(Syntax):
+    start = r"^@{"
+    end   = r"^}@"
+    escapable = True
+    allow_escape = True
+    grammar = BASE_GRAMMAR
+
+    def pack(self, contents):
+        if "}" not in contents:
+            raise(SyntaxError("\n\n  Expected format '@{<text>}{<link>}@', but missing inner '}'."))
+        text = contents[:-contents[::-1].index("}")-1]
+        if "{" not in contents:
+            raise(SyntaxError("\n\n  Expected format '@{<text>}{<link>}@', but missing inner '{'."))
+        link = contents[-contents[::-1].index("}")+1:]
+        return f"<a href='{link}'>{text}</a>"
 
 class External(Syntax):
     start = r"{{"
@@ -546,7 +604,7 @@ class External(Syntax):
                         # If it's in pixels, add a 20 pixel pad
                         if ("px" in new_height):
                             new_height = new_height.replace("px","")
-                            height = str(int(new_height) + 20) + "px"
+                            height = str(float(new_height.strip()) + 20) + "px"
                         # Otherwise, use the default height
                     if ("width" in contents):
                         # Retreive the width from the style
@@ -555,13 +613,13 @@ class External(Syntax):
                         # If it's in pixels, add a 10 pixel pad
                         if ("px" in new_width):
                             new_width = new_width.replace("px","")
-                            width = str(int(new_width) + 10) + "px"
+                            width = str(float(new_width.strip()) + 10) + "px"
                         # Otherwise, use the default width
                     iframe_style = f"height: {height}; width: {width};"
                     print(f" adding plot style to external HTML: '{iframe_style}'")
             return f"<iframe src='{path}' frameBorder='0' style='{iframe_style}'></iframe>"
         else:
-            raise(UnsupportedExtension(f"External files with extension '{extension}' are not supported."))
+            raise(UnsupportedExtension(f"\n\n  External files with extension '{extension}' are not supported."))
 
 class Spacer(Syntax):
     start = r"^<[0-9]+>"
@@ -570,7 +628,7 @@ class Spacer(Syntax):
 
     def pack(self, text):
         space_size = self.match[1:-1]
-        return "<div style='width: %spx;'>"%(space_size)
+        return f"<div style='width: {space_size}px;'>"
 
 class NewLine(Syntax):
     start = r"^(\r\n|\r|\n)+"
@@ -644,6 +702,7 @@ class Title(Syntax):
     escapable = True
     line_start = True
     return_end = False
+    modifiable = True
 
     def pack(self, text):
         begin = "<h1>"
@@ -656,10 +715,12 @@ class Header(Syntax):
     grammar = BASE_GRAMMAR
     escapable = True
     line_start = True
+    modifiable = True
 
     def pack(self, text):
-        begin = "<h"+str(len(self.match)+1)+">"
-        end   = "</h"+str(len(self.match)+1)+">"
+        header_id = text.strip().replace('"','\\"').replace(">","")
+        begin = f'<h{len(self.match)+1} id="{header_id}">'
+        end   = f"</h{len(self.match)+1}>"
         return begin + text + end
 
 class Subtext(Syntax):
@@ -670,7 +731,7 @@ class Subtext(Syntax):
     return_end = False
 
     def pack(self, text):
-        begin = "<p style='padding-left: %spx; margin-top: 0px; margin-bottom: 0px;'>"%(15*(len(self.match)))
+        begin = f"<p style='padding-left: {15*(len(self.match))}px; margin-top: 0px; margin-bottom: 0px;'>"
         end   = "</p>"
         return begin + text + end
 
@@ -710,8 +771,8 @@ class TableEntry(Syntax):
             return ""
     
 
-BASE_GRAMMAR += [Math(), Emphasis(), Note(), Ref(), Subtext(),
-                 Ignore(), Spacer()]
+BASE_GRAMMAR += [Modifier(), Math(), Emphasis(), Note(), Ref(), 
+                 Jump(), Link(), Subtext(), Ignore(), Spacer()]
 TABLE_GRAMMAR += BASE_GRAMMAR + [Divider(), TableEntry()]
 ALL_GRAMMAR = [NewLine(), Divider(), Header(), Title(),
                Bibliography(), External(), UnorderedElement(),
@@ -765,15 +826,55 @@ class Body(Block):
 #                        Text Parsing Function     
 # ====================================================================
 
+# Given a list of raw lines, parse out a title, description, and
+# authors form the top of a text file (if given).
+def parse_header(raw_lines):
+    html_kwargs = {}
+    found = []
+    authors = ""
+    affiliations = ""
+    # Loop through until done processing frontmatter
+    while (len(raw_lines) > 0) and (len(raw_lines[0][:-1]) > 0):
+        if raw_lines[0][:2] == "::":
+            # Process an author
+            found.append("author")
+            auth_line_split = [s.strip() for s in raw_lines.pop(0)[2:].split("::")]
+            if len(auth_line_split) != 3:
+                raise(AuthorError("\n\n  Expected author format ':: <name> :: <email> :: <web address>'."))
+            name, email, web = auth_line_split
+            authors += f"{AA_BEGIN}{name}: {web}\n"
+            affiliations += f"{AA_BEGIN}{email}\n"
+            continue
+        elif ("title" not in found):
+            # Process a title
+            if ("title" in found): break
+            found.append("title")
+            html_kwargs["title"] = raw_lines.pop(0).strip()
+            html_kwargs["frontmatter_title"] = html_kwargs["title"].replace(":","")
+            continue
+        elif ("description" not in found):
+            # Process a description
+            found.append("description")
+            # If there is a description on the second line, use it
+            html_kwargs["description"] = raw_lines.pop(0).strip()
+            html_kwargs["frontmatter_description"] = html_kwargs["description"].replace(":","-")
+            continue
+        else: break
+    # Update the authors and affiliations if they were provided
+    if (len(authors) > 0):
+        html_kwargs["authors"] = authors
+        html_kwargs["affiliations"] = affiliations
+    return html_kwargs
+
 # Given a path to a text file, process that text file into an HTML
 # document format.
 def parse_txt(path_name, output_folder='', verbose=True,
               use_local=USE_LOCAL, resource_folder=RESOURCE_FOLDER):
-    if verbose: print("Processing '%s'..."%path_name)
+    if verbose: print(f"Processing '{path_name}'...")
     with open(path_name) as f:
         raw_lines = f.readlines()
     if len(raw_lines) == 0: return ""
-    if verbose: print("Read text with %i lines."%len(raw_lines))
+    if verbose: print(f"Read text with {len(raw_lines)} lines.")
     # Initialize the document build keyword arguments
     html_kwargs = {"frontmatter_title":TITLE, "frontmatter_description":DESCRIPTION,
                    "title":TITLE, "description":DESCRIPTION,
@@ -781,15 +882,10 @@ def parse_txt(path_name, output_folder='', verbose=True,
                    "notes":NOTES}
     # Add the formatted author block
     html_kwargs.update(FORMAT_AUTHORS())
-    # If there is a title on the first line, use it
-    if (len(raw_lines) > 0) and (len(raw_lines[0]) > 0):
-        html_kwargs["title"] = raw_lines.pop(0).strip()
-        html_kwargs["frontmatter_title"] = html_kwargs["title"].replace(":","")
-    # If there is a description on the second line, use it
-    if (len(raw_lines) > 0) and (len(raw_lines[0]) > 0):
-        html_kwargs["description"] = raw_lines.pop(0).strip()
-        html_kwargs["frontmatter_description"] = html_kwargs["description"].replace(":","-")
-    if (len(raw_lines) > 0) and (len(raw_lines[0]) == 0): raw_lines.pop(0)
+    # If there is a title on the first line (minus '\n'), parse header
+    if (len(raw_lines) > 0) and (len(raw_lines[0][:-1]) > 0):
+        html_kwargs.update(parse_header(raw_lines))
+
     # ================================================================
     # Initialize a syntax processor that does not have to close and
     # captures all parts of the grammar
@@ -810,7 +906,7 @@ def parse_txt(path_name, output_folder='', verbose=True,
     html = HTML(use_local, resource_folder).format( **html_kwargs )
     with open(output_file, "w") as f:
         print(html, file=f)
-    if verbose: print("Saved output in '%s'."%output_file)
+    if verbose: print(f"Saved output in '{output_file}'.")
     # Return the HTML document (using formatted kwargs to insert text)
     return html
 
