@@ -8,7 +8,8 @@
 
 ## INSTALLATION:
 
-    $ pip install txt_to_html
+    $ pip install git+https://github.com/tchlux/txt_to_html.git
+
 
 ## PYTHON USAGE:
 
@@ -20,7 +21,7 @@
 
   The execution of the program looks like:
 
-    $ python txt_to_html.py <source text file> [<output folder>]
+    $ python -m txt_to_html <source text file> [<output folder>] [--online] [--no-appendix]
 
   This outputs a <source text file>.html ready to be viewed in a browser.
 

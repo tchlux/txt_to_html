@@ -2,7 +2,7 @@
 # grammar to parse "markdown" style text files into HTML documents.
 # 
 # LINE STARTS:
-#   New lines ---------> paragraphs
+#   New lines ---------> new paragraphs
 #   Spaces ------------> indentation
 #   "#+" --------------> Header levels (number of '#' is the level)
 #   "-" ---------------> unordered lists
@@ -10,6 +10,7 @@
 #   "|" ---------------> table entries
 #   "----(-)*" --------> divider
 #   "====(=)*" --------> marks the rest of the document as a bibtex bibliography
+#   "^^^^(^)*" --------> new page (on print)
 #   "!+" --------------> new title
 #   "{{<path>}}" ------> include external file, supports [.png, .jpeg, .jpg, .html]
 #   "%%+" -------------> ignore rest of line (comments in file)
@@ -21,31 +22,58 @@
 #   "$$<math>$$" ------> new line (centered) math
 #   "*<text>*" --------> italics
 #   "**<text>**" ------> bold
+#   "***<text>***" ----> underline
+#   "****<text>****" --> monospace
 #   "@@<header>@@" ----> links in document to that header (verbatim name)
 #   "<< modifier >>" --> direct access to html parent element attribute settings
 #   "<(0-9)+>" --------> spacer with specified pixel width
 #   "@{text}{link}@" --> text with a hyperlink
+#   "{<color>}<text>{<color>} --> make all contained text "color".
 # 
 # 
-# TODO:  Make a syntax for inserting python code                ****
+# TODO:  Make a syntax for inserting python code '>>>'
+# TODO:  Redo the "text with a hyperlink" to be "(text){{link}}"
+# TODO:  Make line starts work --> "(or strictly after spaces)"
+# TODO:  Make subtext line that is empty behave like an empty new line.
 # TODO:  Not having an extra newline after ordered list causes
 #        incorrect parse (line without paragraph wrapper).
+# TODO:  Unordered and ordered lists do not work within subtext block,
+#        all things at same indent level should be in same subtext.
+# TODO:  Create custom "ordered list" using manual trick that allows
+#        for the control of list item names in line.
+# TODO:  Make *all* new lines matter. Get rid of the Latex
+#        double-new-line for paragraph and extras are ignored.
+#        Extra new lines should be treated the same a new lines, for
+#        spacing out the contents of the file.
+# TODO:  Generate a "Table of Contents" with links
+# TODO:  The "<< >>" doesn't seem to be working properly, won't
+#        overwrite existing properties.
+# TODO:  Generate one 'test' file that demonstrates all Syntax.
+# TODO:  Processing is too slow, The amount of python logic
+#        per-character in the source document is too high. Appears to
+#        have quadratic complexity, but it shouldn't. Only need to
+#        process as many characters of the string as the longest
+#        syntax allows.
 
-import os, re
+
+import os, re, time
 
 OUTPUT_DIR = os.path.dirname(os.path.abspath(__file__))
+MAX_REGEX_LEN = 100
+LAST_PRINT_TIME = time.time()
+UPDATE_FREQ_SEC = .1
 TITLE = "Notes"
 DESCRIPTION = ""
 AA_BEGIN = "       - "
 AUTHORS_AND_AFFILIATION = [
-    ("Thomas Lux: https://www.linkedin.com/in/thomas-ch-lux", "thomas.ch.lux@gmail.com"),
+    # ("Thomas Lux: https://www.linkedin.com/in/thomas-ch-lux", "thomas.ch.lux@gmail.com"),
     # ("Thomas Lux: http://people.cs.vt.edu/~tchlux/", "tchlux@vt.edu"),
-    # ("Tyler Chang: http://people.cs.vt.edu/~thchang/", "thchang@vt.edu"),
 ]
 
 RESOURCE_FOLDER = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),"resources")
 USE_LOCAL = True
+FOUND_NOTE = False
 
 # Format the author and affiliation block appropriately, return in
 # dictionary to be used as the **kwargs of formatting HTML.
@@ -336,7 +364,7 @@ class Syntax(list):
     line_start = False  # True if this syntax must start on a new line
     allow_escape = True # True if escape characters are allowed in this syntax
     return_end = True   # True if the "end" regular expression should be returned
-    modifiable = False  # True if "Modifier" class content is allowed to update "pack"
+    modifiable = True   # True if "Modifier" class content is allowed to update "pack"
     
     # Function for handling unprocessed strings. If this syntax is
     # closed then an error is raised, otherwise the body is returned.
@@ -365,19 +393,20 @@ class Syntax(list):
         if (self.modifiable and (len(modifier) > 0)):
             # Add the modifier to the element
             output = output.replace(">",f" {modifier}>",1)
+            if verbose: print(output)
         return output
 
     # Returns the length of the match at the beginning of a string
     # that fits the "start" regular expression for this syntax.
     def starts(self, string):
-        match = re.match(self.start, string)
+        match = re.match(self.start, string[:MAX_REGEX_LEN])
         if match: return True, match.group()
         else:     return False, ""
 
     # Returns the length of the match at the beginning of a string
     # that fits the "end" regular expression for this syntax.
     def ends(self, string, start):
-        match = re.match(self.end, string)
+        match = re.match(self.end, string[:MAX_REGEX_LEN])
         if match:
             if self.symmetric:
                 if (len(start) == len(match.group())): 
@@ -391,12 +420,14 @@ class Syntax(list):
 
     # Recursive function for processing a string into a Syntax heirarchy.
     def process(self, string, start="", spacing="", verbose=False):
+        # Get the global variable for the last print time.
+        global LAST_PRINT_TIME
         if verbose: print(spacing,"Begin",type(self),[start])
         # Initialize a new copy of this class to hold contents (and keep match)
         body = type(self)([""])
         body.match = start
         new_line = re.match(ON_NEW_LINE, start) != None
-        escaped = (re.match(ESCAPE_CHAR, start) != None) and self.allow_escape
+        escaped = self.allow_escape and (re.match(ESCAPE_CHAR, start) != None)
         if (escaped): start = start[:-1]
         # Initialize remaining length of string (>0 to allow matching "")
         remaining = max(1, len(string))
@@ -416,6 +447,9 @@ class Syntax(list):
                 # Search for the syntax at this part of the string
                 found, syntax_start = syntax.starts(string)
                 if found:
+                    # Update the global variable if a note was found.
+                    if (type(syntax) == Note):
+                        global FOUND_NOTE; FOUND_NOTE = True
                     contents, ends_on, string = syntax.process(
                         string[len(syntax_start):], syntax_start, 
                         spacing+"  ", verbose)
@@ -424,7 +458,7 @@ class Syntax(list):
                     new_line = re.match(ON_NEW_LINE, ends_on) != None
                     new_line = new_line or (type(body[-1]) == NewLine)
                     # Record whether or not trailing character was ESCAPE_CHAR
-                    escaped = (re.match(ESCAPE_CHAR, ends_on) != None) and self.allow_escape
+                    escaped = self.allow_escape and (re.match(ESCAPE_CHAR, ends_on) != None)
                     break
             else:
                 # Add string contents appropriately
@@ -437,7 +471,7 @@ class Syntax(list):
                 # Allow for the escaping of the escape character
                 if not escaped:
                     # Record whether or not we are currently escaping
-                    escaped = (re.match(ESCAPE_CHAR, string[0]) != None) and self.allow_escape
+                    escaped = self.allow_escape and (re.match(ESCAPE_CHAR, string[0]) != None)
                     if (escaped): body[-1] = body[-1][:-1]
                 else: 
                     # Otherwise, reset the current escaped status
@@ -450,6 +484,9 @@ class Syntax(list):
                 string = string[1:]
             # Update the stopping condition check
             remaining = len(string)
+            if ((time.time() - LAST_PRINT_TIME) > UPDATE_FREQ_SEC):
+                print(f"{remaining:9d}",end="\r")
+                LAST_PRINT_TIME = time.time()
         if verbose:
             print(spacing," End",type(self),body)
             print(spacing,body)
@@ -552,7 +589,7 @@ class Jump(Syntax):
 
     def pack(self, text):
         text = text.replace('"','\\"')
-        return f'<a href="#{text.replace(">","")}"><i>{text}</i></a>'
+        return f'<a href="#{text.replace(">","")}">{text}</a>'
         # return f'<a href="#{text}">Section \'<i>{text}</i>\'</a>'
 
 class Link(Syntax):
@@ -560,7 +597,6 @@ class Link(Syntax):
     end   = r"^}@"
     escapable = True
     allow_escape = True
-    grammar = BASE_GRAMMAR
 
     def pack(self, contents):
         if "}" not in contents:
@@ -579,7 +615,7 @@ class External(Syntax):
     
     def pack(self, path):
         extension = path[-path[::-1].find("."):]
-        if extension in {"png","jpg","jpeg"}:
+        if extension in {"png","jpg","jpeg","svg"}:
             return f"<img src='{path}' width='90%' style='margin: 20px; display: inline-block;'>"
         elif extension in {"html"}:
             # Try and read the best size for the iframe from the file.
@@ -617,6 +653,10 @@ class External(Syntax):
                         # Otherwise, use the default width
                     iframe_style = f"height: {height}; width: {width};"
                     print(f" adding plot style to external HTML: '{iframe_style}'")
+            else:
+                height = "60vh"
+                width = "70vw"
+                iframe_style = f"height: {height}; width: {width};"
             return f"<iframe src='{path}' frameBorder='0' style='{iframe_style}'></iframe>"
         else:
             raise(UnsupportedExtension(f"\n\n  External files with extension '{extension}' are not supported."))
@@ -654,6 +694,15 @@ class Divider(Syntax):
     def pack(self, text):
         return "\n<hr>"+text+"\n"
 
+class NewPage(Syntax):
+    start = r"^(\^\^\^\^)\^*"
+    end   = r"^(\r\n|\r|\n)"
+    line_start = True
+    return_end = False
+
+    def pack(self, text):
+        return '\n<p style="page-break-after: always;"></p>\n'
+
 class Bibliography(Syntax):
     start = r"^(====)=*"
     end = r"^$"
@@ -689,11 +738,21 @@ class Emphasis(Syntax):
         elif len(self.match) == 2:
             return "<b>" + text + "</b>"
         elif len(self.match) == 3:
-            return "<b><i>" + text + "</i></b>"
+            return "<u>" + text + "</u>"
         elif len(self.match) == 4:
-            return "<text style='color: #aaa; font-family: monospace;'>" + text + "</text>"
+            return "<text style='font-family: monospace;'>" + text + "</text>"
         else:
             return text
+
+class Color(Syntax):
+    start = r"^{[^}]+}"
+    end   = r"^{[^}]+}"
+    symmetric = True
+    escapable = True
+    grammar = BASE_GRAMMAR
+
+    def pack(self, text):
+        return "<font color='"+self.match[1:-1]+"'> " + text + " </font>"
 
 class Title(Syntax):
     start = r"^!+"
@@ -702,7 +761,6 @@ class Title(Syntax):
     escapable = True
     line_start = True
     return_end = False
-    modifiable = True
 
     def pack(self, text):
         begin = "<h1>"
@@ -715,7 +773,6 @@ class Header(Syntax):
     grammar = BASE_GRAMMAR
     escapable = True
     line_start = True
-    modifiable = True
 
     def pack(self, text):
         header_id = text.strip().replace('"','\\"').replace(">","")
@@ -747,7 +804,7 @@ class UnorderedElement(Syntax):
         return "<li>"+ text +"</li>"
 
 class OrderedElement(Syntax):
-    start = r"^[0-9]+\)"
+    start = r"^([0-9]+\)|[0-9]+\.)"
     end   = r"^(\r\n|\r|\n)"
     grammar = BASE_GRAMMAR
     line_start = True
@@ -771,10 +828,10 @@ class TableEntry(Syntax):
             return ""
     
 
-BASE_GRAMMAR += [Modifier(), Math(), Emphasis(), Note(), Ref(), 
+BASE_GRAMMAR += [Modifier(), Math(), Emphasis(), Color(), Note(), Ref(), 
                  Jump(), Link(), Subtext(), Ignore(), Spacer()]
 TABLE_GRAMMAR += BASE_GRAMMAR + [Divider(), TableEntry()]
-ALL_GRAMMAR = [NewLine(), Divider(), Header(), Title(),
+ALL_GRAMMAR = [NewLine(), Divider(), NewPage(), Header(), Title(),
                Bibliography(), External(), UnorderedElement(),
                OrderedElement(), TableEntry()] + BASE_GRAMMAR
 
@@ -868,8 +925,8 @@ def parse_header(raw_lines):
 
 # Given a path to a text file, process that text file into an HTML
 # document format.
-def parse_txt(path_name, output_folder='', verbose=True,
-              use_local=USE_LOCAL, resource_folder=RESOURCE_FOLDER):
+def parse_txt(path_name, output_folder='.', verbose=True, appendix=True,
+              use_local=USE_LOCAL, resource_folder=RESOURCE_FOLDER, show=True):
     if verbose: print(f"Processing '{path_name}'...")
     with open(path_name) as f:
         raw_lines = f.readlines()
@@ -880,6 +937,7 @@ def parse_txt(path_name, output_folder='', verbose=True,
                    "title":TITLE, "description":DESCRIPTION,
                    "bibliography":BIBLIOGRAPHY, "appendix":APPENDIX,
                    "notes":NOTES}
+    if not appendix: html_kwargs["appendix"] = ""
     # Add the formatted author block
     html_kwargs.update(FORMAT_AUTHORS())
     # If there is a title on the first line (minus '\n'), parse header
@@ -892,21 +950,35 @@ def parse_txt(path_name, output_folder='', verbose=True,
     processor = Syntax()
     processor.closed = False
     processor.grammar = ALL_GRAMMAR
+    global FOUND_NOTE; FOUND_NOTE = False
     # Process the text into a heirarchical syntax format
+    if verbose: print(f"Processing raw lines of text..")
     body, _, _ = processor.process("".join(raw_lines))
     # Check for a bibliography at the end of the body
     if type(body[-1]) == Bibliography:
         html_kwargs["bibliography"] = body.pop(-1).render()
+    # Pop the appendix if there were no notes or bibliography
+    elif not FOUND_NOTE:
+        html_kwargs["appendix"] = ""
+    if verbose: print(f"Rendering the HTML document..")
     # Render the heirarchical syntax into HTML text
     rendered_body, _ = Body().render(body)
     html_kwargs.update({"body":rendered_body})
     # Save the HTML document locally
+    if verbose: print(f"Saving the HTML document..")
     file_name = os.path.basename(path_name)
-    output_file = os.path.join(output_folder, file_name + ".html")
+    output_file = os.path.join(os.path.abspath(output_folder), 
+                               file_name + ".html")
     html = HTML(use_local, resource_folder).format( **html_kwargs )
     with open(output_file, "w") as f:
         print(html, file=f)
     if verbose: print(f"Saved output in '{output_file}'.")
+    # Show the resulting file in the webbrowser (if appropriate).
+    if show: 
+        import webbrowser
+        if verbose: print(f"Opening " + "file://" + output_file + " in default web browser.")
+        webbrowser.open("file://" + output_file)
+    if verbose: print(f"Returning raw HTML as output.")
     # Return the HTML document (using formatted kwargs to insert text)
     return html
 
