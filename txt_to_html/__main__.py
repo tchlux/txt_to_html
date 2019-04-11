@@ -29,7 +29,7 @@ if (len(sys.argv) >= 3):
     no_show = "--no-show" in sys.argv
     if no_show: sys.argv.remove("--no-show")
     # Check for an output folder
-    if len(sys.argv) > 2:
+    if len(sys.argv) >= 3:
         output_folder = sys.argv[-1]
 
 # Get the path of the input file, then parse and save it.

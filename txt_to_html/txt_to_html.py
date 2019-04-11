@@ -68,7 +68,7 @@ AUTHORS_AND_AFFILIATION = [
 ]
 
 RESOURCE_FOLDER = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),"resources")
+    os.path.dirname(os.path.abspath(__file__)),"resources")
 USE_LOCAL = True
 FOUND_NOTE = False
 
