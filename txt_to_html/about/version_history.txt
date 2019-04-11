@@ -4,3 +4,5 @@
 
 | 0.0.4<br>April 2019 | Fixing some more installation bugs. |
 
+| 0.0.5<br>April 2019 | Last push was poorly created, fixing packager. |
+
