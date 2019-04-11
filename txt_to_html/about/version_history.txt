@@ -2,3 +2,5 @@
 | 0.0.1<br>April 2019 | Repackaged and ready to be installed. |
 | 0.0.3<br>April 2019 | Fixing some packaing bugs. |
 
+| 0.0.4<br>April 2019 | Fixing some more installation bugs. |
+

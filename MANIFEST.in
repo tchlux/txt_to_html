@@ -1,9 +1,17 @@
+recursive-include new_txt *
+recursive-include pyvis *
 recursive-include txt_to_html *
 include .DS_Store
-recursive-include resources *
-include MANIFEST.in
+recursive-include qaml *
+recursive-include util *
+recursive-include LargeFiles *
+include Paper_[2018-11-09]_Stat_Mixture.zip
+recursive-include fmodpy *
+recursive-include VarSys *
+recursive-include vistool *
 include readme.md
-recursive-include testing *
-include setup.py
-include setup.cfg
-include LICENSE.txt
+recursive-include Git_Analytics *
+recursive-include packager *
+recursive-include gym *
+recursive-include sync *
+recursive-include random-network-distillation *
