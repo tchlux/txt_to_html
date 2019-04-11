@@ -1,0 +1,19 @@
+- [ ] Make {{file.txt}} import a txt file in place into the document.
+- [ ] Make a syntax for inserting python code '>>>'
+- [ ] Redo the "text with a hyperlink" to be "(text){{link}}"
+- [ ] Make line starts work --> "(or strictly after spaces)"
+- [ ] Make subtext line that is empty behave like an empty new line.
+- [ ] Adjust print format settings to make margins and justification.
+- [ ] Create custom "ordered list" using manual trick that allows
+      for the control of list item names in line.
+- [ ] Make *all* new lines matter. Get rid of the Latex
+      double-new-line for paragraph and extras are ignored.
+- [ ] Extra new lines should be treated the same a new lines, for
+      spacing out the contents of the file.
+- [ ] Generate a "Table of Contents" with links
+- [ ] Generate one 'test' file that demonstrates all Syntax.
+- [ ] Processing is too slow, The amount of python logic
+      per-character in the source document is too high. Appears to
+      have quadratic complexity, but it shouldn't. Only need to
+      process as many characters of the string as the longest
+      syntax allows.

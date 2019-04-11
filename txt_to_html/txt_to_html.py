@@ -31,32 +31,29 @@
 #   "{<color>}<text>{<color>} --> make all contained text "color".
 # 
 # 
-# TODO:  Make a syntax for inserting python code '>>>'
-# TODO:  Redo the "text with a hyperlink" to be "(text){{link}}"
-# TODO:  Make line starts work --> "(or strictly after spaces)"
-# TODO:  Make subtext line that is empty behave like an empty new line.
-# TODO:  Not having an extra newline after ordered list causes
-#        incorrect parse (line without paragraph wrapper).
-# TODO:  Unordered and ordered lists do not work within subtext block,
-#        all things at same indent level should be in same subtext.
-# TODO:  Create custom "ordered list" using manual trick that allows
-#        for the control of list item names in line.
-# TODO:  Make *all* new lines matter. Get rid of the Latex
-#        double-new-line for paragraph and extras are ignored.
-#        Extra new lines should be treated the same a new lines, for
-#        spacing out the contents of the file.
-# TODO:  Generate a "Table of Contents" with links
-# TODO:  The "<< >>" doesn't seem to be working properly, won't
-#        overwrite existing properties.
-# TODO:  Generate one 'test' file that demonstrates all Syntax.
-# TODO:  Processing is too slow, The amount of python logic
-#        per-character in the source document is too high. Appears to
-#        have quadratic complexity, but it shouldn't. Only need to
-#        process as many characters of the string as the longest
-#        syntax allows.
 
 
 import os, re, time
+
+class MutableString(str):
+    def __init__(self, data):
+        self.data = list(data)
+    def __repr__(self):
+        return "".join(self.data)
+    def __setitem__(self, index, value):
+        self.data[index] = value
+    def __getitem__(self, index):
+        if type(index) == slice:
+            return "".join(self.data[index])
+        return self.data[index]
+    def __delitem__(self, index):
+        del self.data[index]
+    def __add__(self, other):
+        self.data.extend(list(other))
+    def __len__(self):
+        return len(self.data)
+
+
 
 OUTPUT_DIR = os.path.dirname(os.path.abspath(__file__))
 MAX_REGEX_LEN = 100
@@ -176,6 +173,9 @@ def HTML(use_local=USE_LOCAL, resource_folder=RESOURCE_FOLDER):
       td {{
         padding-left: 10px !important;
         padding-right: 10px !important;
+        padding-top: 7px !important;
+        padding-bottom: 7px !important;
+        line-height: 1.3 !important;
       }}
     </style>
 
@@ -953,7 +953,8 @@ def parse_txt(path_name, output_folder='.', verbose=True, appendix=True,
     global FOUND_NOTE; FOUND_NOTE = False
     # Process the text into a heirarchical syntax format
     if verbose: print(f"Processing raw lines of text..")
-    body, _, _ = processor.process("".join(raw_lines))
+    all_text = "".join(raw_lines)
+    body, _, _ = processor.process(all_text)
     # Check for a bibliography at the end of the body
     if type(body[-1]) == Bibliography:
         html_kwargs["bibliography"] = body.pop(-1).render()

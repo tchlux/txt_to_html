@@ -20,12 +20,14 @@
 
 ## VERSION HISTORY:
 
+|Version and Date       | Description           |
+|-----------------------|-----------------------|
 {version_history}
 
-{upcoming}
+### BUGS
 
 {bugs}
 
-{usability}
+### IMPROVEMENTS
 
 {improvements}

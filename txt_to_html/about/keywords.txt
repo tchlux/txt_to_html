@@ -1,6 +1,4 @@
-python
 python3
-python27
 txt
 html
 markdown

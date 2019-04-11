@@ -1,4 +1,17 @@
 import sys, os
+from . import DIRECTORY, create, push
+
+# Function for printing the help message.
+def print_help_message():
+    with open(os.path.join(DIRECTORY, "about", "usage.txt")) as f:
+        print(f.read())
+
+# If no arguments were provided, give the usage.
+if len(sys.argv) <= 2:
+    print_help_message()
+    exit()
+
+import sys, os
 
 # If no arguments were provided, give the usage.
 if len(sys.argv) < 2:
@@ -18,6 +31,7 @@ if len(sys.argv) < 2:
     print("    If the [output directory] argument is given, output file is saved in that directory.")
     print()
     exit()
+
 
 use_local = True
 no_appendix = False
