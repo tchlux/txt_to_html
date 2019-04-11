@@ -6,32 +6,12 @@ def print_help_message():
     with open(os.path.join(DIRECTORY, "about", "usage.txt")) as f:
         print(f.read())
 
+print("sys.argv:",sys.argv)
+
 # If no arguments were provided, give the usage.
-if len(sys.argv) <= 2:
+if len(sys.argv) <= 1:
     print_help_message()
     exit()
-
-import sys, os
-
-# If no arguments were provided, give the usage.
-if len(sys.argv) < 2:
-    print("Usage:")
-    print("  python -m "+os.path.basename(os.path.dirname(os.path.abspath(__file__)))+
-          " <file_name> [--online] [--no-appendix] [--no-show] [output folder]")
-    print()
-    print("    Default behavior is to use local resources for displyaing HTML\n"+
-          "    and to output in the current working director.")
-    print()
-    print("    If the '--online' argument is given, resource files are internet-accessible and nonlocal.")
-    print()
-    print("    If the '--no-appendix' argument is given, the appendix section is removed from the html document.")
-    print()
-    print("    If the '--no-show' argument is given, the resulting HTML file is *not* opened in a browser upon completion.")
-    print()
-    print("    If the [output directory] argument is given, output file is saved in that directory.")
-    print()
-    exit()
-
 
 use_local = True
 no_appendix = False
