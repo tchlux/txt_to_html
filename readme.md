@@ -25,8 +25,7 @@ Reads the txt file into a heirarchical format of different "syntax" lists. Proce
 |Version and Date       | Description           |
 |-----------------------|-----------------------|
 | 0.0.0<br>February 2018 | Created a parser that produces Distill formatted <br> HTML files from TXT files with markdown style <br> syntax. |
-| 0.0.1<br>April 2019 | Repackaged and ready to be installed. |
-| 0.0.3<br>April 2019 | Fixing some packaing bugs. |
+| 0.0.6<br>April 2019 | Reorganized code and fixed some minor bugs that were <br> preventing install on other machines. Now the <br> package should operate correctly if installed via <br> the recommended instructions. |
 ### BUGS
 - [ ] Not having an extra newline after ordered list causes
       incorrect parse (line without paragraph wrapper).
