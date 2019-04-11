@@ -1,31 +1,4 @@
 | 0.0.0<br>February 2018 | Created a parser that produces Distill formatted <br> HTML files from TXT files with markdown style <br> syntax. |
-| 0.0.0<br>April 2019 | Repackaged and ready to be installed. |
-
-| 0.0.0<br>April 2019 | Repackaged and ready to be installed. |
-
-| 0.0.0<br>April 2019 | Repackaged and ready to be installed. |
-
-| 0.0.0<br>April 2019 | Repackaged and ready to be installed. |
-
-| 0.0.0<br>April 2019 | Repackaged and ready to be installed. |
-
-| 0.0.0<br>April 2019 | Repackaged and ready to be installed. |
-
-| 0.0.0<br>April 2019 | Repackaged and ready to be installed. |
-
-| 0.0.0<br>April 2019 | Repackaged and ready to be installed. |
-
-| 0.0.0<br>April 2019 | Repackaged and ready to be installed. |
-
-| 0.0.0<br>April 2019 | Repackaged and ready to be installed. |
-
-| 0.0.0<br>April 2019 | Repackaged and ready to be installed. |
-
-| 0.0.0<br>April 2019 | Repackaged and ready to be installed. |
-
-| 0.0.0<br>April 2019 | Repackaged and ready to be installed. |
-
 | 0.0.1<br>April 2019 | Repackaged and ready to be installed. |
-
-| 0.0.2<br>April 2019 | Repackaged and ready to be installed. |
+| 0.0.3<br>April 2019 | Fixing some packaing bugs. |
 

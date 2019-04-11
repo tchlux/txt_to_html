@@ -8,15 +8,15 @@ except:
 
 import os
 # Go to the "about" directory in the package directory
-package_name = os.path.basename(os.path.dirname(os.path.abspath(__file__)))
+package_name = "txt_to_html"
 package_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),package_name,"about")
 # Convenience function for reading information files
 def read(f_name):
     text = []
     with open(os.path.join(package_dir, f_name)) as f:
         for line in f:
-            line = line.strip()
-            if (len(line) > 0) and (line[0] != "%"):
+            line = line.strip("\n")
+            if (len(line.strip()) > 0) and (line[0] != "%"):
                 text.append(line)
     return text
 
