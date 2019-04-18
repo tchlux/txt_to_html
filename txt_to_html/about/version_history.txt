@@ -5,3 +5,5 @@
 
 | 0.0.8<br>April 2019 | Added a option to the build and set the default <br> compilation to justify the output body text. |
 
+| 0.0.9<br>April 2019 | Added a `--no-justify` option to the build and set <br> the default compilation to justify the output body <br> text. |
+

@@ -29,6 +29,7 @@ Reads the txt file into a heirarchical format of different "syntax" lists. Proce
 | 0.0.6<br>April 2019 | Reorganized code and fixed some minor bugs that were <br> preventing install on other machines. Now the <br> package should operate correctly if installed via <br> the recommended instructions. |
 | 0.0.7<br>April 2019 | Added a '--no-justify' option to the build and set <br> the default compilation to justify the output body <br> text. |
 | 0.0.8<br>April 2019 | Added a option to the build and set the default <br> compilation to justify the output body text. |
+| 0.0.9<br>April 2019 | Added a `--no-justify` option to the build and set <br> the default compilation to justify the output body <br> text. |
 ### BUGS
 - [ ] Not having an extra newline after ordered list causes
       incorrect parse (line without paragraph wrapper).
