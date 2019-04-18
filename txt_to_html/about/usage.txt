@@ -13,13 +13,13 @@
 
   Default behavior is to use local resources for displyaing HTML and to output in the current working director.
 
-  If the '--online' argument is given, resource files are internet-accessible and nonlocal.
+  If the `--online` argument is given, resource files are internet-accessible and nonlocal.
 
-  If the '--no-appendix' argument is given, the appendix section is removed from the html document.
+  If the `--no-appendix` argument is given, the appendix section is removed from the html document.
 
-  If the '--no-show' argument is given, the resulting HTML file is *not* opened in a browser upon completion.
+  If the `--no-show` argument is given, the resulting HTML file is *not* opened in a browser upon completion.
 
-  If the '--no-justify argument is given, the resulting HTML file has body text which will *not* be justified (layout that normalizes line width).
+  If the `--no-justify` argument is given, the resulting HTML file has body text which will *not* be justified (layout that normalizes line width).
 
-  If the [output directory] argument is given, output file is saved in that directory.
+  If the `[output directory]` argument is given, output file is saved in that directory, which *must* already exist.
 

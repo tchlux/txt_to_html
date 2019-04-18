@@ -15,11 +15,11 @@
     $ python -m txt_to_html <source text file> [--online] [--no-appendix] [--no-show] [--no-justify] [output folder]
   This outputs a <source text file>.html ready to be viewed in a browser.
   Default behavior is to use local resources for displyaing HTML and to output in the current working director.
-  If the '--online' argument is given, resource files are internet-accessible and nonlocal.
-  If the '--no-appendix' argument is given, the appendix section is removed from the html document.
-  If the '--no-show' argument is given, the resulting HTML file is *not* opened in a browser upon completion.
-  If the '--no-justify argument is given, the resulting HTML file has body text which will *not* be justified (layout that normalizes line width).
-  If the [output directory] argument is given, output file is saved in that directory.
+  If the `--online` argument is given, resource files are internet-accessible and nonlocal.
+  If the `--no-appendix` argument is given, the appendix section is removed from the html document.
+  If the `--no-show` argument is given, the resulting HTML file is *not* opened in a browser upon completion.
+  If the `--no-justify` argument is given, the resulting HTML file has body text which will *not* be justified (layout that normalizes line width).
+  If the `[output directory]` argument is given, output file is saved in that directory, which *must* already exist.
 ## HOW IT WORKS:
 Reads the txt file into a heirarchical format of different "syntax" lists. Processes the syntax list with a series of "blocks". Outputs html document.
 ## VERSION HISTORY:
@@ -28,6 +28,7 @@ Reads the txt file into a heirarchical format of different "syntax" lists. Proce
 | 0.0.0<br>February 2018 | Created a parser that produces Distill formatted <br> HTML files from TXT files with markdown style <br> syntax. |
 | 0.0.6<br>April 2019 | Reorganized code and fixed some minor bugs that were <br> preventing install on other machines. Now the <br> package should operate correctly if installed via <br> the recommended instructions. |
 | 0.0.7<br>April 2019 | Added a '--no-justify' option to the build and set <br> the default compilation to justify the output body <br> text. |
+| 0.0.8<br>April 2019 | Added a option to the build and set the default <br> compilation to justify the output body text. |
 ### BUGS
 - [ ] Not having an extra newline after ordered list causes
       incorrect parse (line without paragraph wrapper).
