@@ -7,18 +7,21 @@ except:
     raise(DependencyError("Missing python package 'setuptools'.\n  pip install --user setuptools"))
 
 import os
-# Go to the "about" directory in the package directory
-package_name = "txt_to_html"
-package_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),package_name,"about")
+
 # Convenience function for reading information files
-def read(f_name):
+def read(f_name, empty_lines=False):
     text = []
-    with open(os.path.join(package_dir, f_name)) as f:
+    with open(os.path.join(package_about, f_name)) as f:
         for line in f:
             line = line.strip("\n")
-            if (len(line.strip()) > 0) and (line[0] != "%"):
-                text.append(line)
+            if (not empty_lines) and (len(line.strip()) == 0): continue
+            if (len(line) > 0) and (line[0] == "%"): continue
+            text.append(line)
     return text
+
+# Go to the "about" directory in the package directory
+package_about = os.path.join(os.path.dirname(os.path.abspath(__file__)),package_name,"about")
+package_name = read(package_about, "package_name.txt")
 
 if __name__ == "__main__":
     #      Read in the package description files     
