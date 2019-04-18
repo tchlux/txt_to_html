@@ -94,6 +94,13 @@ APPENDIX = '''
 </dt-appendix>
 '''
 
+JUSTIFY_CSS = '''
+      dt-article p {
+        text-align: justify;
+      }
+'''
+
+
 def HTML(use_local=USE_LOCAL, resource_folder=RESOURCE_FOLDER):
     print(f"Formatting HTML {'' if use_local else 'not '}using local files and resources.")
 
@@ -153,6 +160,9 @@ def HTML(use_local=USE_LOCAL, resource_folder=RESOURCE_FOLDER):
     </script>
 
     <style type="text/css">
+
+{justify}
+
       dt-article ol, dt-article ul {{
         padding-left: 50px;
       }}
@@ -925,8 +935,9 @@ def parse_header(raw_lines):
 
 # Given a path to a text file, process that text file into an HTML
 # document format.
-def parse_txt(path_name, output_folder='.', verbose=True, appendix=True,
-              use_local=USE_LOCAL, resource_folder=RESOURCE_FOLDER, show=True):
+def parse_txt(path_name, output_folder='.', verbose=True,
+              appendix=True, justify=False, use_local=USE_LOCAL,
+              resource_folder=RESOURCE_FOLDER, show=True):
     if verbose: print(f"Processing '{path_name}'...")
     with open(path_name) as f:
         raw_lines = f.readlines()
@@ -936,7 +947,7 @@ def parse_txt(path_name, output_folder='.', verbose=True, appendix=True,
     html_kwargs = {"frontmatter_title":TITLE, "frontmatter_description":DESCRIPTION,
                    "title":TITLE, "description":DESCRIPTION,
                    "bibliography":BIBLIOGRAPHY, "appendix":APPENDIX,
-                   "notes":NOTES}
+                   "notes":NOTES, "justify":JUSTIFY_CSS}
     if not appendix: html_kwargs["appendix"] = ""
     # Add the formatted author block
     html_kwargs.update(FORMAT_AUTHORS())
@@ -961,6 +972,8 @@ def parse_txt(path_name, output_folder='.', verbose=True, appendix=True,
     # Pop the appendix if there were no notes or bibliography
     elif not FOUND_NOTE:
         html_kwargs["appendix"] = ""
+    # Remove justification if it is not desired.
+    if not justify: html_kwargs["justify"] = ""
     if verbose: print(f"Rendering the HTML document..")
     # Render the heirarchical syntax into HTML text
     rendered_body, _ = Body().render(body)

@@ -16,6 +16,7 @@ if len(sys.argv) <= 1:
 use_local = True
 no_appendix = False
 no_show = False
+no_justify = False
 output_folder = ""
 # Get (if given) the command line arguments (output folder, online)
 if (len(sys.argv) >= 3):
@@ -28,6 +29,9 @@ if (len(sys.argv) >= 3):
     # Check for "no show"
     no_show = "--no-show" in sys.argv
     if no_show: sys.argv.remove("--no-show")
+    # Check for "justify"
+    no_justify = "--no-justify" in sys.argv
+    if no_justify: sys.argv.remove("--no-justify")
     # Check for an output folder
     if len(sys.argv) >= 3:
         output_folder = sys.argv[-1]
@@ -36,5 +40,6 @@ if (len(sys.argv) >= 3):
 path = os.path.abspath(sys.argv[1])
 
 from txt_to_html import parse_txt
-parse_txt(path, output_folder, use_local=use_local, 
-          appendix=(not no_appendix), show=(not no_show))
+parse_txt(path, output_folder, use_local=use_local,
+          justify=(not no_justify), show=(not no_show),
+          appendix=(not no_appendix))
