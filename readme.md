@@ -26,14 +26,18 @@ pip install git+https://github.com/tchlux/txt_to_html.git
 
 ### PYTHON:
 
-    import txt_to_html
-    txt_to_html.parse_txt("<txt source file>")
+```python
+import txt_to_html
+txt_to_html.parse_txt("<txt source file>")
+```
 
 ### COMMAND LINE:
 
   The execution of the program looks like:
 
-    $ python -m txt_to_html <source text file> [--online] [--no-appendix] [--no-show] [--no-justify] [output folder]
+```bash
+python -m txt_to_html <source text file> [--online] [--no-appendix] [--no-show] [--no-justify] [output folder]
+```
 
   This outputs a <source text file>.html ready to be viewed in a browser.
 
