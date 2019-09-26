@@ -1,1 +1,0 @@
-Reads the txt file into a heirarchical format of different "syntax" lists. Processes the syntax list with a series of "blocks". Outputs html document.

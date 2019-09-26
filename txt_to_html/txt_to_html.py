@@ -171,6 +171,18 @@ def HTML(use_local=USE_LOCAL, resource_folder=RESOURCE_FOLDER):
         list-style: none;
       }}
 
+      dt-article h2 {{
+        border-bottom: 1px solid #aaa;
+      }}
+
+      dt-article h3 {{
+        font-style: normal;
+      }}
+
+      dt-article h4 {{
+        font-size: 12pt;
+      }}
+
       dt-article li {{
         margin-bottom: 10px;
       }}
@@ -187,6 +199,43 @@ def HTML(use_local=USE_LOCAL, resource_folder=RESOURCE_FOLDER):
         padding-bottom: 7px !important;
         line-height: 1.3 !important;
       }}
+
+      p.caption {{
+        line-height: 1.3;
+        font-family: sans-serif;
+        font-size: 15px;
+        text-align: center;
+        color: #777;
+        margin-top: -30px;
+        padding-top: 0px;
+        padding-left: 30px;
+        padding-right: 30px;
+      }}
+
+    span.header {{
+      display: block;
+      height: 3vh;
+      margin-top: -3vh;
+      visibility: hidden;
+    }}
+
+    span.caption {{
+      display: block;
+      height: 65vh;
+      margin-top: -65vh;
+      visibility: hidden;
+    }}
+
+    .jump {{
+      color: #333;
+      border-bottom: 1px solid #eee;
+    }}
+
+    .jump:hover {{
+      color: #888;
+      border-bottom: 1px dotted #eee;
+    }}
+
     </style>
 
     <dt-article>
@@ -595,11 +644,12 @@ class Ref(Syntax):
 class Jump(Syntax):
     start = r"^@@"
     end   = r"^@@"
+    grammar = BASE_GRAMMAR
     escapable = True
 
     def pack(self, text):
         text = text.replace('"','\\"')
-        return f'<a href="#{text.replace(">","")}">{text}</a>'
+        return f'<a class="jump" href="#{text.replace(">","")}">{text}</a>'
         # return f'<a href="#{text}">Section \'<i>{text}</i>\'</a>'
 
 class Link(Syntax):
@@ -617,16 +667,39 @@ class Link(Syntax):
         link = contents[-contents[::-1].index("}")+1:]
         return f"<a href='{link}'>{text}</a>"
 
+class Caption(Syntax):
+    start = r"^::"
+    end   = r"^::(\r\n|\r|\n)"
+    line_start = True
+    grammar = BASE_GRAMMAR
+
+    def pack(self, contents):
+        values = contents.split("::")
+        caption = values[0].strip()
+        label = values[1].strip() if len(values) > 1 else ""
+        # Determine additional attributes based on usage.
+        id_str = jump_str = label_str = ""
+        if (len(label) > 0):
+            id_str = f" id='{label}'"
+            jump_str = f"<span class='caption'{id_str}></span>"
+            label_str = f"<b>{label}:</b> "
+        return f"{jump_str}<p class='caption'{id_str}>{label_str}{caption}</p>"
+
 class External(Syntax):
-    start = r"{{"
-    end   = r"}}"
+    start = r"^{{"
+    end   = r"^}}"
     line_start = True
     symmetric = True
     
     def pack(self, path):
         extension = path[-path[::-1].find("."):]
         if extension in {"png","jpg","jpeg","svg"}:
-            return f"<img src='{path}' width='90%' style='margin: 20px; display: inline-block;'>"
+            return f"<p style='margin-top:0; margin-bottom:0;'><img src='{path}' width='90%' style='margin: 0px 20px 0px 20px; display: inline-block;'></p>"
+        # elif extension in {"pdf"}:
+        #     height = "420px" # "60vh"
+        #     width = "510px" # "70vw"
+        #     iframe_style = f"height: {height}; width: {width};"
+        #     return f"<iframe src='{path}' frameBorder='0' style='{iframe_style}'></iframe>"
         elif extension in {"html"}:
             # Try and read the best size for the iframe from the file.
             if os.path.exists(path):
@@ -641,8 +714,8 @@ class External(Syntax):
                     contents = contents[contents.find('"')+1:]
                     contents = contents[:contents.find('"')]
                     # Set the default width and height, but check for declared
-                    height = "60vh"
-                    width = "70vw"
+                    height = "420px" # "60vh"
+                    width = "510px" # "70vw"
                     if ("height" in contents):
                         # Retreive the height from the style
                         new_height = contents[contents.index("height:") + len("height:"):]
@@ -664,8 +737,8 @@ class External(Syntax):
                     iframe_style = f"height: {height}; width: {width};"
                     print(f" adding plot style to external HTML: '{iframe_style}'")
             else:
-                height = "60vh"
-                width = "70vw"
+                height = "420px" # "60vh"
+                width = "510px" # "70vw"
                 iframe_style = f"height: {height}; width: {width};"
             return f"<iframe src='{path}' frameBorder='0' style='{iframe_style}'></iframe>"
         else:
@@ -773,7 +846,8 @@ class Title(Syntax):
     return_end = False
 
     def pack(self, text):
-        begin = "<h1>"
+        title_id = text.strip().replace('"','\\"').replace(">","")
+        begin = f'<h1 id="{title_id}">'
         end   = "</h1>"
         return begin + text + end
 
@@ -786,9 +860,10 @@ class Header(Syntax):
 
     def pack(self, text):
         header_id = text.strip().replace('"','\\"').replace(">","")
-        begin = f'<h{len(self.match)+1} id="{header_id}">'
+        link = f"<span class='header' id='{header_id}'></span>"
+        begin = f'<h{len(self.match)+1}>'
         end   = f"</h{len(self.match)+1}>"
-        return begin + text + end
+        return link + begin + text + end
 
 class Subtext(Syntax):
     start = r" +"
@@ -842,7 +917,7 @@ BASE_GRAMMAR += [Modifier(), Math(), Emphasis(), Color(), Note(), Ref(),
                  Jump(), Link(), Subtext(), Ignore(), Spacer()]
 TABLE_GRAMMAR += BASE_GRAMMAR + [Divider(), TableEntry()]
 ALL_GRAMMAR = [NewLine(), Divider(), NewPage(), Header(), Title(),
-               Bibliography(), External(), UnorderedElement(),
+               Bibliography(), External(), Caption(), UnorderedElement(),
                OrderedElement(), TableEntry()] + BASE_GRAMMAR
 
 # ====================================================================

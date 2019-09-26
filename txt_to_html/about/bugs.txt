@@ -1,6 +1,0 @@
-- [ ] Not having an extra newline after ordered list causes
-      incorrect parse (line without paragraph wrapper).
-- [ ] Unordered and ordered lists do not work within subtext block,
-      all things at same indent level should be in same subtext.
-- [ ] The "<< >>" doesn't seem to be working properly, won't
-      overwrite existing properties.

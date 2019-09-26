@@ -1,14 +1,26 @@
-|             |                |
-|-------------|----------------|
-|**TITLE:**   | txt_to_html         |
-|**PURPOSE:** | A .txt to .html parser that makes pretty documents with quasi-markdown.|      |
-|**AUTHOR:**  | Thomas C.H. Lux  |
-|**EMAIL:**   | thomas.ch.lux@gmail.com |
+<p align="center">
+  <h1 align="center">txt_to_html</h1>
+</p>
+
+<p align="center">
+A <code>.txt</code> to <code>.html</code> parser that makes pretty documents with quasi-markdown.
+</p>
 
 
 ## INSTALLATION:
 
-    $ pip install git+https://github.com/tchlux/txt_to_html.git
+  Install the latest stable release with:
+
+```bash
+pip install https://github.com/tchlux/txt_to_html/archive/1.0.0.zip
+```
+
+  In order to install the current files in this repository
+  (potentially less stable) use:
+
+```bash
+pip install git+https://github.com/tchlux/txt_to_html.git
+```
 
 ## USAGE:
 
@@ -44,11 +56,7 @@ Reads the txt file into a heirarchical format of different "syntax" lists. Proce
 
 ## VERSION HISTORY:
 
-|Version and Date       | Description           |
-|-----------------------|-----------------------|
-| 0.0.0<br>February 2018 | Created a parser that produces Distill formatted <br> HTML files from TXT files with markdown style <br> syntax. |
-| 0.0.6<br>April 2019 | Reorganized code and fixed some minor bugs that were <br> preventing install on other machines. Now the <br> package should operate correctly if installed via <br> the recommended instructions. |
-| 0.0.9<br>April 2019 | Added a `--no-justify` option to the build and set <br> the default compilation to justify the output body <br> text. |
+See [this file](txt_to_html/about/version_history.md) for full list.
 
 ### BUGS
 
