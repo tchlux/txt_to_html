@@ -3,10 +3,27 @@ from . import DIRECTORY
 
 # Function for printing the help message.
 def print_help_message():
-    with open(os.path.join(DIRECTORY, "about", "usage.txt")) as f:
-        print(f.read())
+    print('''
 
-print("sys.argv:",sys.argv)
+USAGE:
+  python -m txt_to_html <source text file> [--online] [--no-appendix] [--no-show] [--no-justify] [output folder]
+
+This outputs a <source text file>.html ready to be viewed in a browser.
+
+Default behavior is to use local resources for displyaing HTML and to output in the current working director.
+
+If the `--online` argument is given, resource files are internet-accessible and nonlocal.
+
+If the `--no-appendix` argument is given, the appendix section is removed from the html document.
+
+If the `--no-show` argument is given, the resulting HTML file is *not* opened in a browser upon completion.
+
+If the `--no-justify` argument is given, the resulting HTML file has body text which will *not* be justified (layout that normalizes line width).
+
+If the `[output directory]` argument is given, output file is saved in that directory, which *must* already exist.
+    ''')
+
+
 
 # If no arguments were provided, give the usage.
 if len(sys.argv) <= 1:

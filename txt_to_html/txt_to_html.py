@@ -24,6 +24,7 @@
 #   "**<text>**" ------> bold
 #   "***<text>***" ----> underline
 #   "****<text>****" --> monospace
+#   "`<text>`" --------> monospace
 #   "@@<header>@@" ----> links in document to that header (verbatim name)
 #   "<< modifier >>" --> direct access to html parent element attribute settings
 #   "<(0-9)+>" --------> spacer with specified pixel width
@@ -31,6 +32,11 @@
 #   "{<color>}<text>{<color>} --> make all contained text "color".
 # 
 # 
+# TODO:
+#  - Make the usage of regex's controlled by an attribute, use exact
+#    string matching where possible.
+#  - Find way to measure time spent on various operations, identify
+#    source of quadratic complexity.
 
 
 import os, re, time
@@ -117,7 +123,7 @@ def HTML(use_local=USE_LOCAL, resource_folder=RESOURCE_FOLDER):
     distill_source = '''
     <!-- Include Distill -->
     <!-- <script src="https://distill.pub/template.v1.js"></script> -->
-    {online_start} <script src="http://people.cs.vt.edu/tchlux/distill.template.v1.no-banner.js"></script> {online_end}
+    {online_start} <script src="https://tchlux.github.io/documents/distill.template.v1.no-banner.js"></script> {online_end}
     {local_start} <script src="{resource_folder}/distill.template.v1.no-banner.js"></script> {local_end}
     '''.format(**source_format)
 
@@ -413,8 +419,9 @@ class AuthorError(Exception): pass
 
 # Class for defining a syntax in text.
 class Syntax(list):
-    start   = r"^$"     # The regex matching the start of this syntax
-    end     = r"^$"     # The regex matching the end of this syntax
+    regex   = True      # Whether or not the start and end are regular expresions.
+    start   = r"^$"     # The regex / string matching the start of this syntax
+    end     = r"^$"     # The regex / string matching the end of this syntax
     match   = ""        # The string matched when this Syntax started
     grammar = []        # The grammar for processing this syntax (list of syntaxes)
     closed  = True      # True if this syntax must successfully end
@@ -458,9 +465,16 @@ class Syntax(list):
     # Returns the length of the match at the beginning of a string
     # that fits the "start" regular expression for this syntax.
     def starts(self, string):
-        match = re.match(self.start, string[:MAX_REGEX_LEN])
-        if match: return True, match.group()
-        else:     return False, ""
+        if self.regex:
+            match = re.match(self.start, string[:MAX_REGEX_LEN])
+            if match: return True, match.group()
+            else:     return False, ""
+        else:
+            substring = string[:len(self.start)]
+            if (substring == self.start):
+                return True, substring
+            else:
+                return False, ""
 
     # Returns the length of the match at the beginning of a string
     # that fits the "end" regular expression for this syntax.
@@ -612,8 +626,9 @@ LIST_GRAMMAR = []
 TABLE_GRAMMAR = []
 
 class Modifier(Syntax):
-    start = r"^<<"
-    end   = r"^>>"
+    regex = False
+    start = "<<"
+    end   = ">>"
     escapable = True
 
 class Math(Syntax):
@@ -631,8 +646,9 @@ class Math(Syntax):
             return "\n$$" + text + "$$"
 
 class Ref(Syntax):
-    start = r"^\[\[+"
-    end   = r"^\]\]+"
+    regex = False
+    start = "[["
+    end   = "]]"
     symmetric = True
 
     def pack(self, text):
@@ -642,8 +658,9 @@ class Ref(Syntax):
             return text
 
 class Jump(Syntax):
-    start = r"^@@"
-    end   = r"^@@"
+    regex = False
+    start = "@@"
+    end   = "@@"
     grammar = BASE_GRAMMAR
     escapable = True
 
@@ -653,8 +670,9 @@ class Jump(Syntax):
         # return f'<a href="#{text}">Section \'<i>{text}</i>\'</a>'
 
 class Link(Syntax):
-    start = r"^@{"
-    end   = r"^}@"
+    regex = False
+    start = "@{"
+    end   = "}@"
     escapable = True
     allow_escape = True
 
@@ -686,20 +704,17 @@ class Caption(Syntax):
         return f"{jump_str}<p class='caption'{id_str}>{label_str}{caption}</p>"
 
 class External(Syntax):
-    start = r"^{{"
-    end   = r"^}}"
+    regex = False
+    start = "{{"
+    end   = "}}"
     line_start = True
     symmetric = True
     
     def pack(self, path):
+        path, height, width = (path.split("|") + ["420px", "100%"])[:3]
         extension = path[-path[::-1].find("."):]
         if extension in {"png","jpg","jpeg","svg"}:
-            return f"<p style='margin-top:0; margin-bottom:0;'><img src='{path}' width='90%' style='margin: 0px 20px 0px 20px; display: inline-block;'></p>"
-        # elif extension in {"pdf"}:
-        #     height = "420px" # "60vh"
-        #     width = "510px" # "70vw"
-        #     iframe_style = f"height: {height}; width: {width};"
-        #     return f"<iframe src='{path}' frameBorder='0' style='{iframe_style}'></iframe>"
+            return f"<p style='margin-top:0; margin-bottom:0;'><img src='{path}' width='{width}' style='margin: 0px 20px 0px 20px; display: inline-block;'></p>"
         elif extension in {"html"}:
             # Try and read the best size for the iframe from the file.
             if os.path.exists(path):
@@ -714,8 +729,6 @@ class External(Syntax):
                     contents = contents[contents.find('"')+1:]
                     contents = contents[:contents.find('"')]
                     # Set the default width and height, but check for declared
-                    height = "420px" # "60vh"
-                    width = "510px" # "70vw"
                     if ("height" in contents):
                         # Retreive the height from the style
                         new_height = contents[contents.index("height:") + len("height:"):]
@@ -733,14 +746,8 @@ class External(Syntax):
                         if ("px" in new_width):
                             new_width = new_width.replace("px","")
                             width = str(float(new_width.strip()) + 10) + "px"
-                        # Otherwise, use the default width
-                    iframe_style = f"height: {height}; width: {width};"
-                    print(f" adding plot style to external HTML: '{iframe_style}'")
-            else:
-                height = "420px" # "60vh"
-                width = "510px" # "70vw"
-                iframe_style = f"height: {height}; width: {width};"
-            return f"<iframe src='{path}' frameBorder='0' style='{iframe_style}'></iframe>"
+            iframe_style = f"left: 0; top: 0; position: absolute; height: 100%; width: {width};"
+            return f"<p style='position: relative; height: {height};'><iframe src='{path}' frameBorder='0' style='{iframe_style}'></iframe></p>"
         else:
             raise(UnsupportedExtension(f"\n\n  External files with extension '{extension}' are not supported."))
 
@@ -797,8 +804,9 @@ class Bibliography(Syntax):
         return begin + text + end
 
 class Note(Syntax):
-    start = r"^\(\(+"
-    end   = r"^\)\)+"
+    regex = False
+    start = "(("
+    end   = "))"
     symmetric = True
     grammar = BASE_GRAMMAR
 
@@ -827,9 +835,21 @@ class Emphasis(Syntax):
         else:
             return text
 
+class InlineCode(Syntax):
+    regex = False
+    start = "`"
+    end   = "`"
+    escapable = True
+    grammar = BASE_GRAMMAR
+
+    def pack(self, text):
+        return "<text style='font-family: monospace;'>" + text + "</text>"
+
+
 class Color(Syntax):
-    start = r"^{[^}]+}"
-    end   = r"^{[^}]+}"
+    regex = False
+    start = "{"
+    end   = "}"
     symmetric = True
     escapable = True
     grammar = BASE_GRAMMAR
@@ -913,8 +933,9 @@ class TableEntry(Syntax):
             return ""
     
 
-BASE_GRAMMAR += [Modifier(), Math(), Emphasis(), Color(), Note(), Ref(), 
-                 Jump(), Link(), Subtext(), Ignore(), Spacer()]
+BASE_GRAMMAR += [Modifier(), Math(), Emphasis(), InlineCode(),
+                 Color(), Note(), Ref(), Jump(), Link(), Subtext(),
+                 Ignore(), Spacer()]
 TABLE_GRAMMAR += BASE_GRAMMAR + [Divider(), TableEntry()]
 ALL_GRAMMAR = [NewLine(), Divider(), NewPage(), Header(), Title(),
                Bibliography(), External(), Caption(), UnorderedElement(),
