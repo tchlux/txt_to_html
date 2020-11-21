@@ -56,7 +56,31 @@ if (len(sys.argv) >= 3):
 # Get the path of the input file, then parse and save it.
 path = os.path.abspath(sys.argv[1])
 
+
+
 from txt_to_html import parse_txt
 parse_txt(path, output_folder, use_local=use_local,
           justify=(not no_justify), show=(not no_show),
           appendix=(not no_appendix))
+
+
+# import pprofile
+# # Deterministic profiler
+# p = pprofile.Profile()
+# with p():
+#     from txt_to_html import parse_txt
+#     parse_txt(path, output_folder, use_local=use_local,
+#               justify=(not no_justify), show=(not no_show),
+#               appendix=(not no_appendix))
+# # p.print_stats()
+# with open("/Users/thomaslux/Desktop/pprofile-results.out", "w") as f:
+#     p.callgrind(f)
+
+
+# def run():
+#     from txt_to_html import parse_txt
+#     parse_txt(path, output_folder, use_local=use_local,
+#               justify=(not no_justify), show=(not no_show),
+#               appendix=(not no_appendix))
+# import cProfile
+# cProfile.run("run()", sort="time")

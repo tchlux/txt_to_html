@@ -1,7 +1,0 @@
-Low Margin Plots
-
-Here is the example with a small margin:
-
-{{test.html}}
-
-How does that plot look in line?

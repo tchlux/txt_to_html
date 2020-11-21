@@ -33,24 +33,28 @@
 # 
 # 
 # TODO:
-#  - Make the usage of regex's controlled by an attribute, use exact
-#    string matching where possible.
 #  - Find way to measure time spent on various operations, identify
 #    source of quadratic complexity.
+#    ^^ all of the string operations, strings are immutable in Python
+#       so there are copies happening everywhere
 
 
-import os, re, time
+import os, time
+import regex
 
 class MutableString(str):
     def __init__(self, data):
-        self.data = list(data)
+        if (type(data) != list):
+            self.data = list(data)
+        else:
+            self.data = data
     def __repr__(self):
         return "".join(self.data)
     def __setitem__(self, index, value):
         self.data[index] = value
     def __getitem__(self, index):
         if type(index) == slice:
-            return "".join(self.data[index])
+            return type(self)(self.data[index])
         return self.data[index]
     def __delitem__(self, index):
         del self.data[index]
@@ -58,12 +62,24 @@ class MutableString(str):
         self.data.extend(list(other))
     def __len__(self):
         return len(self.data)
+    def __str__(self):
+        return "".join(self.data)
 
+# Do a truncated print where the middle of long strings is replaced by ...
+def INLINE(val, max_len=30):
+    string = str(val)
+    if (len(string) > max_len):
+        string = string[:max_len//2] + " ... " + string[-max_len//2:]
+    return [string]
 
+# Print the type of a class (truncated to last component)
+def TYPE(val):
+    return INLINE( str(type(val)).split(".")[-1].split("'")[0] )
 
 OUTPUT_DIR = os.path.dirname(os.path.abspath(__file__))
 MAX_REGEX_LEN = 100
 LAST_PRINT_TIME = time.time()
+CHARS_PARSED = 0
 UPDATE_FREQ_SEC = .1
 TITLE = "Notes"
 DESCRIPTION = ""
@@ -408,8 +424,10 @@ NOTES = '''
 #                 Generic Recursive Syntax Parsing Class     
 # ====================================================================
 
-ON_NEW_LINE = r"(\r\n|\r|\n)$"
-ESCAPE_CHAR = r"\\$"
+NEWLINE = "((\r\n)|\r|\n)"
+ON_NEW_LINE = f"^{NEWLINE}"
+ESCAPE_CHAR = "^\\"
+EOF = "END_OF_ORIGINAL_FILE"
 SPECIAL_HTML_CHARS = {"<":"&lt;", ">":"&gt;"}
 class UnsupportedExtension(Exception): pass
 class IncompleteSyntax(Exception): pass
@@ -419,9 +437,10 @@ class AuthorError(Exception): pass
 
 # Class for defining a syntax in text.
 class Syntax(list):
-    regex   = True      # Whether or not the start and end are regular expresions.
-    start   = r"^$"     # The regex / string matching the start of this syntax
-    end     = r"^$"     # The regex / string matching the end of this syntax
+    start   = "^.*"     # The regex / string matching the start of this syntax
+    end     = "^"+EOF   # The regex / string matching the end of this syntax
+    extra_s = 0         # The number of extra characters matched by "start" regex.
+    extra_e = 0         # The number of extra characters matched by "end" regex.
     match   = ""        # The string matched when this Syntax started
     grammar = []        # The grammar for processing this syntax (list of syntaxes)
     closed  = True      # True if this syntax must successfully end
@@ -447,7 +466,7 @@ class Syntax(list):
     # Recursive function for rendering output text from nested strings
     # and Syntax objects to produce final processed output text.
     def render(self, spacing="", verbose=False):
-        if verbose: print(spacing, "Rendering", type(self), [self.match])
+        if verbose: print(spacing, "Rendering", TYPE(self), INLINE(self.match))
         text = ""
         modifier = ""
         for el in self:
@@ -459,111 +478,107 @@ class Syntax(list):
         if (self.modifiable and (len(modifier) > 0)):
             # Add the modifier to the element
             output = output.replace(">",f" {modifier}>",1)
-            if verbose: print(output)
+            if verbose: print(INLINE(output))
         return output
 
     # Returns the length of the match at the beginning of a string
     # that fits the "start" regular expression for this syntax.
     def starts(self, string):
-        if self.regex:
-            match = re.match(self.start, string[:MAX_REGEX_LEN])
-            if match: return True, match.group()
-            else:     return False, ""
-        else:
-            substring = string[:len(self.start)]
-            if (substring == self.start):
-                return True, substring
-            else:
-                return False, ""
+        match = regex.match(self.start, str(string))
+        if (match is not None): return True, string[match[0]:match[1]-self.extra_s]
+        else:                   return False, ""
 
     # Returns the length of the match at the beginning of a string
     # that fits the "end" regular expression for this syntax.
     def ends(self, string, start):
-        match = re.match(self.end, string[:MAX_REGEX_LEN])
-        if match:
+        match = regex.match(self.end, str(string))
+        if (match is not None):
+            match = string[match[0]:match[1]-self.extra_e]
             if self.symmetric:
-                if (len(start) == len(match.group())): 
+                if (len(start) == len(match)): 
                     return True, (start if self.return_end else "")
                 else:
                     return False, ""
             else:
-                return True, (match.group() if self.return_end else "")
+                return True, (match if self.return_end else "")
         else:
             return False, ""
 
     # Recursive function for processing a string into a Syntax heirarchy.
-    def process(self, string, start="", spacing="", verbose=False):
+    def process(self, string, i, start="", spacing="", verbose=False):
         # Get the global variable for the last print time.
         global LAST_PRINT_TIME
-        if verbose: print(spacing,"Begin",type(self),[start])
+        if verbose: print(spacing,"Begin",TYPE(self),INLINE(start))
         # Initialize a new copy of this class to hold contents (and keep match)
         body = type(self)([""])
         body.match = start
-        new_line = re.match(ON_NEW_LINE, start) != None
-        escaped = self.allow_escape and (re.match(ESCAPE_CHAR, start) != None)
+        new_line = regex.match(ON_NEW_LINE, str(start)) is not None
+        escaped = self.allow_escape and (regex.match(ESCAPE_CHAR, str(start)) is not None)
         if (escaped): start = start[:-1]
         # Initialize remaining length of string (>0 to allow matching "")
-        remaining = max(1, len(string))
+        remaining = max(1, len(string)-i)
         # Search the string for the start and end of this syntax
         while remaining > 0:
             # First, check to see if this syntax has ended
-            found, end = self.ends(string, start)
+            found, end = self.ends(string[i:MAX_REGEX_LEN], start)
             if found:
                 # If this syntax has completed, return
-                if verbose: print(spacing, " End", type(self), body)
-                return body, string[:len(end)], string[len(end):]
+                if verbose: print(spacing, " End", TYPE(self), INLINE(body))
+                return body, str(string[i:i+len(end)]), string[i+len(end):]
             # Check for the beginnings of any sub-syntaxes
             for syntax in self.grammar:
                 # Skip syntax that requires being at the start of a new line
                 if (syntax.line_start and (not new_line)): continue
                 if (syntax.escapable  and (escaped)): continue
                 # Search for the syntax at this part of the string
-                found, syntax_start = syntax.starts(string)
+                found, syntax_start = syntax.starts(string[i:MAX_REGEX_LEN])
                 if found:
                     # Update the global variable if a note was found.
                     if (type(syntax) == Note):
                         global FOUND_NOTE; FOUND_NOTE = True
                     contents, ends_on, string = syntax.process(
-                        string[len(syntax_start):], syntax_start, 
+                        string[i+len(syntax_start):], 0, syntax_start, 
                         spacing+"  ", verbose)
+                    i = 0
                     body.append(contents)
                     # Record whether or not we are currently on a new line
-                    new_line = re.match(ON_NEW_LINE, ends_on) != None
+                    new_line = regex.match(ON_NEW_LINE, ends_on) is not None
                     new_line = new_line or (type(body[-1]) == NewLine)
                     # Record whether or not trailing character was ESCAPE_CHAR
-                    escaped = self.allow_escape and (re.match(ESCAPE_CHAR, ends_on) != None)
+                    escaped = self.allow_escape and (
+                        regex.match(ESCAPE_CHAR, str(ends_on)) is not None)
                     break
             else:
                 # Add string contents appropriately
                 if (len(body) == 0) or (type(body[-1]) != str):
-                    body.append(string[0])
+                    body.append(string[i])
                 else:
-                    body[-1] += string[0]
+                    body[-1] += string[i]
                 # Record whether or not we are currently on a new line
-                new_line = re.match(ON_NEW_LINE, string[0]) != None
+                new_line = regex.match(ON_NEW_LINE, string[i]) is not None
                 # Allow for the escaping of the escape character
                 if not escaped:
                     # Record whether or not we are currently escaping
-                    escaped = self.allow_escape and (re.match(ESCAPE_CHAR, string[0]) != None)
+                    escaped = self.allow_escape and (regex.match(ESCAPE_CHAR, string[i]) is not None)
                     if (escaped): body[-1] = body[-1][:-1]
                 else: 
                     # Otherwise, reset the current escaped status
                     escaped = False
                     # Check for special HTML characters that need to be
                     # automatically escaped (if escaping is allowed)
-                    if (string[0] in SPECIAL_HTML_CHARS):
-                        body[-1] = body[-1][:-1] + SPECIAL_HTML_CHARS[string[0]]
+                    if (string[i] in SPECIAL_HTML_CHARS):
+                        body[-1] = body[-1][:-1] + SPECIAL_HTML_CHARS[string[i]]
                 # Transition string forward by one character
-                string = string[1:]
+                i += 1
             # Update the stopping condition check
-            remaining = len(string)
+            remaining = len(string) - i
             if ((time.time() - LAST_PRINT_TIME) > UPDATE_FREQ_SEC):
                 print(f"{remaining:9d}",end="\r")
                 LAST_PRINT_TIME = time.time()
         if verbose:
-            print(spacing," End",type(self),body)
-            print(spacing,body)
-            print(spacing,string)
+            print(spacing," End", TYPE(self), INLINE(body))
+            # print(spacing,body)
+            # print(spacing,string)
         # "string" completed without closing this syntax, handle appropraitely
         return self.not_closed(body)
      
@@ -582,25 +597,27 @@ class Block:
 
     # Recursive function for rendering output text from nested Syntaxes
     def render(self, body, spacing="", verbose=False):
-        if verbose: print(spacing, "Begin", type(self))
+        if verbose: print(spacing, "Begin", TYPE(self))
         text = ""
         while len(body) > 0:
+            next_el = body[0]
             # First try and identify any sub-blocks in the body
             for b in self.blocks:
-                if type(body[0]) in b.start:
+                if type(next_el) in b.start:
                     rendered_text, body = b().render(body, spacing+"  ", verbose)
                     text += rendered_text
                     break
             else:
-                recognized_syntax = (type(body[0]) in self.syntax)
-                no_requirement_exists = (str(type(body[0])) not in self.requirements)
-                requirement_met = no_requirement_exists or self.requirements[str(type(body[0]))](body[0])
+                next_el_type = str(type(next_el))
+                recognized_syntax = (type(next_el) in self.syntax)
+                no_requirement_exists = (next_el_type not in self.requirements)
+                requirement_met = no_requirement_exists or self.requirements[next_el_type](next_el)
                 # If (this syntax is recognized) AND
                 #     (there is not a requirement for the syntax) OR
                 #     (the requirement for this syntax is met)
                 if recognized_syntax and requirement_met:
                     # Check to see if this is just a string
-                    if type(body[0]) == str:
+                    if type(next_el) == str:
                         text += body.pop(0)
                     else:
                         # This syntax is accepted by this block
@@ -608,13 +625,13 @@ class Block:
                 else:
                     # This syntax is not accepted by this block
                     if verbose: 
-                        print(spacing, "End (unfinished)", type(self),
-                              recognized_syntax, requirement_met, 
-                              [body[0].match if not requirement_met else ""], 
-                              type(body[0]), [text])
+                        print(spacing, " End (unfinished)", TYPE(self),
+                              TYPE(next_el),
+                              INLINE(next_el.match if not requirement_met else ""),
+                              INLINE([text]))
                     # There was no recognized block nor syntax, return body
                     return self.pack(text), body
-        if verbose: print(spacing, "End (finished)", type(self), [text])
+        if verbose: print(spacing, " End (finished)", TYPE(self), INLINE(text))
         return self.pack(text), body
 
 # ====================================================================
@@ -626,14 +643,15 @@ LIST_GRAMMAR = []
 TABLE_GRAMMAR = []
 
 class Modifier(Syntax):
-    regex = False
-    start = "<<"
-    end   = ">>"
+    start = "^<<" # <<
+    end   = "^>>" # >>
     escapable = True
 
 class Math(Syntax):
-    start = r"^\$+"
-    end   = r"^\$+"
+    start = "^$$*{$}" # $, $$, ...
+    end   = "^$$*{$}" # $, $$, ...
+    extra_s = 1
+    extra_e = 1
     symmetric = True
     escapable = True
     allow_escape = False
@@ -646,9 +664,8 @@ class Math(Syntax):
             return "\n$$" + text + "$$"
 
 class Ref(Syntax):
-    regex = False
-    start = "[["
-    end   = "]]"
+    start = "^[[][[]" # [[
+    end   = "^]]"     # ]]
     symmetric = True
 
     def pack(self, text):
@@ -658,9 +675,8 @@ class Ref(Syntax):
             return text
 
 class Jump(Syntax):
-    regex = False
-    start = "@@"
-    end   = "@@"
+    start = "^@@" # @@
+    end   = "^@@" # @@
     grammar = BASE_GRAMMAR
     escapable = True
 
@@ -670,9 +686,8 @@ class Jump(Syntax):
         # return f'<a href="#{text}">Section \'<i>{text}</i>\'</a>'
 
 class Link(Syntax):
-    regex = False
-    start = "@{"
-    end   = "}@"
+    start = "^@[{]" # @{
+    end   = "^[}]@" # }@
     escapable = True
     allow_escape = True
 
@@ -686,8 +701,9 @@ class Link(Syntax):
         return f"<a href='{link}'>{text}</a>"
 
 class Caption(Syntax):
-    start = r"^::"
-    end   = r"^::(\r\n|\r|\n)"
+    start = "^::"               # ::
+    end   = f"^::{NEWLINE}" # :: followed by "\r\n", "\r", or "\n"
+    extra_e = 1
     line_start = True
     grammar = BASE_GRAMMAR
 
@@ -704,9 +720,8 @@ class Caption(Syntax):
         return f"{jump_str}<p class='caption'{id_str}>{label_str}{caption}</p>"
 
 class External(Syntax):
-    regex = False
-    start = "{{"
-    end   = "}}"
+    start = "^[{][{]" # {{
+    end   = "^[}][}]" # }}
     line_start = True
     symmetric = True
     
@@ -752,8 +767,8 @@ class External(Syntax):
             raise(UnsupportedExtension(f"\n\n  External files with extension '{extension}' are not supported."))
 
 class Spacer(Syntax):
-    start = r"^<[0-9]+>"
-    end   = r"^(@EMPTY MATCH@)*"
+    start = "^<[0123456789][0123456789]*>" # <1 or more digits>
+    end   = "" # Matches everything and gives back ""
     escapable = True
 
     def pack(self, text):
@@ -761,23 +776,28 @@ class Spacer(Syntax):
         return f"<div style='width: {space_size}px;'>"
 
 class NewLine(Syntax):
-    start = r"^(\r\n|\r|\n)+"
-    end   = r"^(@EMPTY MATCH@)*"
+    start = f"^{NEWLINE}{NEWLINE}*{{[\r\n]}}" 
+    #        one or more new line followed by a non-(new line)
+    end   = "" # Matches everything and gives back ""
+    extra_s = 1
 
     def pack(self, text):
         return "\n" + text
 
 class Ignore(Syntax):
-    start = r"^%%"
-    end   = r"^(\r\n|\r|\n)"
+    start = "^%%" # %%
+    end   = f"^{NEWLINE}" # new line
+    extra_e = 1
     escapable = True
     line_start = True
 
     def pack(self, text): return ""
 
 class Divider(Syntax):
-    start = r"^(----)-*"
-    end   = r"^(\r\n|\r|\n)"
+    start = "^(----)-*{-}" # at least 4 * '-'
+    end   = f"^{NEWLINE}" # new line
+    extra_s = 1
+    extra_e = 1
     line_start = True
     return_end = False
 
@@ -785,8 +805,10 @@ class Divider(Syntax):
         return "\n<hr>"+text+"\n"
 
 class NewPage(Syntax):
-    start = r"^(\^\^\^\^)\^*"
-    end   = r"^(\r\n|\r|\n)"
+    start = "^(^^^^)^*{^}" # at least 4 * '^'
+    end   = f"^{NEWLINE}" # new line
+    extra_s = 1
+    extra_e = 1
     line_start = True
     return_end = False
 
@@ -794,8 +816,9 @@ class NewPage(Syntax):
         return '\n<p style="page-break-after: always;"></p>\n'
 
 class Bibliography(Syntax):
-    start = r"^(====)=*"
-    end = r"^$"
+    start = "^(====)=*{=}" # at least 4 * '='
+    end   = "" # anything
+    extra_s = 1
     line_start = True
 
     def pack(self, text):
@@ -804,9 +827,8 @@ class Bibliography(Syntax):
         return begin + text + end
 
 class Note(Syntax):
-    regex = False
-    start = "(("
-    end   = "))"
+    start = "^[(][(]" # ((
+    end   = "^[)][)]" # ))
     symmetric = True
     grammar = BASE_GRAMMAR
 
@@ -817,8 +839,10 @@ class Note(Syntax):
             return "("*len(self.match) + text + ")"*len(self.match)
 
 class Emphasis(Syntax):
-    start = r"^\*+"
-    end   = r"^\*+"
+    start = "^[*][*]*{[*]}" # one or more * followed by (not *)
+    end   = "^[*][*]*{[*]}" # one or more * followed by (not *)
+    extra_s = 1
+    extra_e = 1
     symmetric = True
     escapable = True
     grammar = BASE_GRAMMAR
@@ -836,9 +860,8 @@ class Emphasis(Syntax):
             return text
 
 class InlineCode(Syntax):
-    regex = False
-    start = "`"
-    end   = "`"
+    start = "^`"
+    end   = "^`"
     escapable = True
     grammar = BASE_GRAMMAR
 
@@ -847,9 +870,8 @@ class InlineCode(Syntax):
 
 
 class Color(Syntax):
-    regex = False
-    start = "{"
-    end   = "}"
+    start = "^[{]" # {
+    end   = "^[}]" # }
     symmetric = True
     escapable = True
     grammar = BASE_GRAMMAR
@@ -858,8 +880,10 @@ class Color(Syntax):
         return "<font color='"+self.match[1:-1]+"'> " + text + " </font>"
 
 class Title(Syntax):
-    start = r"^!+"
-    end   = r"^(\r\n|\r|\n)"
+    start = "^!!*{!}" # One or more !, followed by (not !)
+    end   = f"^{NEWLINE}" # new line
+    extra_s = 1
+    extra_e = 1
     grammar = BASE_GRAMMAR
     escapable = True
     line_start = True
@@ -872,8 +896,10 @@ class Title(Syntax):
         return begin + text + end
 
 class Header(Syntax):
-    start = r"^#+"
-    end   = r"^(\r\n|\r|\n)"
+    start = "^##*{#}" # One or more #, followed by (not #)
+    end   = f"^{NEWLINE}" # new line
+    extra_s = 1
+    extra_e = 1
     grammar = BASE_GRAMMAR
     escapable = True
     line_start = True
@@ -886,8 +912,10 @@ class Header(Syntax):
         return link + begin + text + end
 
 class Subtext(Syntax):
-    start = r" +"
-    end   = r"^(\r\n|\r|\n)"
+    start = "^  *{ }" # one or more spaces followed by a non-space
+    end   = f"^{NEWLINE}" # new line
+    extra_s = 1
+    extra_e = 1
     grammar = BASE_GRAMMAR
     line_start = True
     return_end = False
@@ -898,8 +926,10 @@ class Subtext(Syntax):
         return begin + text + end
 
 class UnorderedElement(Syntax):
-    start = r"^- +"
-    end   = r"^(\r\n|\r|\n)"
+    start = "^-  *{ }" # '-' followed by one or more spaces followed by a non-space
+    end   = f"^{NEWLINE}" # new line
+    extra_s = 1
+    extra_e = 1
     grammar = BASE_GRAMMAR
     line_start = True
     return_end = False
@@ -909,8 +939,10 @@ class UnorderedElement(Syntax):
         return "<li>"+ text +"</li>"
 
 class OrderedElement(Syntax):
-    start = r"^([0-9]+\)|[0-9]+\.)"
-    end   = r"^(\r\n|\r|\n)"
+    start = "^[0123456789][0123456789]*([)]|[.])"
+    #       one or more digits followed by '.' or ')'
+    end   = f"^{NEWLINE}" # new line
+    extra_e = 1
     grammar = BASE_GRAMMAR
     line_start = True
     return_end = False
@@ -919,8 +951,8 @@ class OrderedElement(Syntax):
         return "<li>"+ text +"</li>"
 
 class TableEntry(Syntax):
-    start = r"^\|"
-    end   = r"^(\||\r\n|\r|\n)"
+    start = "^[|]" # |
+    end   = "^([|]|\n|\r|(\r\n))" # | or new line
     grammar = TABLE_GRAMMAR
     escapable = True
     return_end = False
@@ -1060,8 +1092,9 @@ def parse_txt(path_name, output_folder='.', verbose=True,
     global FOUND_NOTE; FOUND_NOTE = False
     # Process the text into a heirarchical syntax format
     if verbose: print(f"Processing raw lines of text..")
-    all_text = "".join(raw_lines)
-    body, _, _ = processor.process(all_text)
+    # all_text = bytes(("".join(raw_lines) + EOF).encode("UTF-8"))
+    all_text = MutableString("".join(raw_lines) + EOF)
+    body, _, _ = processor.process(all_text, 0, verbose=verbose)
     # Check for a bibliography at the end of the body
     if type(body[-1]) == Bibliography:
         html_kwargs["bibliography"] = body.pop(-1).render()
@@ -1072,7 +1105,7 @@ def parse_txt(path_name, output_folder='.', verbose=True,
     if not justify: html_kwargs["justify"] = ""
     if verbose: print(f"Rendering the HTML document..")
     # Render the heirarchical syntax into HTML text
-    rendered_body, _ = Body().render(body)
+    rendered_body, _ = Body().render(body, verbose=verbose)
     html_kwargs.update({"body":rendered_body})
     # Save the HTML document locally
     if verbose: print(f"Saving the HTML document..")
@@ -1092,3 +1125,34 @@ def parse_txt(path_name, output_folder='.', verbose=True,
     # Return the HTML document (using formatted kwargs to insert text)
     return html
 
+
+
+# 2020-10-15 15:22:32
+# 
+################################################################################
+# if ("TableEntry" in str(type(self))):                                        #
+#     print()                                                                  #
+#     print(TYPE(self), INLINE(self.end), INLINE(string), match is not None) #
+#     exit()                                                                   #
+################################################################################
+
+
+# 2020-10-19 10:34:04
+# 
+###################################################
+# if (CHARS_PARSED > 100000): return body, "", "" #
+###################################################
+
+
+# 2020-10-19 10:34:08
+# 
+#####################
+# CHARS_PARSED += 1 #
+#####################
+
+
+# 2020-10-19 10:34:13
+# 
+##################
+# , CHARS_PARSED #
+##################

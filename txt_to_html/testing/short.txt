@@ -1,0 +1,10 @@
+Low Margin Plots
+
+# First header
+Here is the example with a small margin:
+
+{{test.html}}
+
+How does that plot look in line? This will be a longer paragraph that spans multiple lines unless you have a really wide screen. Not sure why anyone would have a screen this wide, but just in case this text will be a little bit longer to ensure that a wrap will happen and the next paragraph can be distinguished from this one.
+
+Now here's another new paragraph, it should not be merged with the past, even if the past spans multiple lines, this one will have an extra gap before it.
