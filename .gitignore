@@ -2,3 +2,4 @@
 *.so
 __pycache__
 .DS_Store
+txt_to_html/testing/long.txt

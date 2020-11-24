@@ -1,55 +1,70 @@
-# This module provides a text file parser that uses a heirarchical
-# grammar to parse "markdown" style text files into HTML documents.
-# 
-# LINE STARTS:
-#   New lines ---------> new paragraphs
-#   Spaces ------------> indentation
-#   "#+" --------------> Header levels (number of '#' is the level)
-#   "-" ---------------> unordered lists
-#   "1)" --------------> ordered lists
-#   "|" ---------------> table entries
-#   "----(-)*" --------> divider
-#   "====(=)*" --------> marks the rest of the document as a bibtex bibliography
-#   "^^^^(^)*" --------> new page (on print)
-#   "!+" --------------> new title
-#   "{{<path>}}" ------> include external file, supports [.png, .jpeg, .jpg, .html]
-#   "%%+" -------------> ignore rest of line (comments in file)
-# 
-# ANYWHERE:
-#   "((<footnote>))" --> footnote in line (will be in appendix as well)
-#   "[[<reference>]]" -> reference key in the bibliography
-#   "$<math>$" --------> in line math
-#   "$$<math>$$" ------> new line (centered) math
-#   "*<text>*" --------> italics
-#   "**<text>**" ------> bold
-#   "***<text>***" ----> underline
-#   "****<text>****" --> monospace
-#   "`<text>`" --------> monospace
-#   "@@<header>@@" ----> links in document to that header (verbatim name)
-#   "<< modifier >>" --> direct access to html parent element attribute settings
-#   "<(0-9)+>" --------> spacer with specified pixel width
-#   "@{text}{link}@" --> text with a hyperlink
-#   "{<color>}<text>{<color>} --> make all contained text "color".
-# 
-# 
-# TODO:
-#  - Find way to measure time spent on various operations, identify
-#    source of quadratic complexity.
-#    ^^ all of the string operations, strings are immutable in Python
-#       so there are copies happening everywhere
+'''
 
+                      txt_to_html
+
+
+This module provides a text file parser that uses a heirarchical
+grammar to parse "markdown" style text files into HTML documents.
+
+LINE STARTS:
+  New lines ---------> new paragraphs
+  Spaces ------------> indentation
+  "#+" --------------> Header levels (number of '#' is the level)
+  "-" ---------------> unordered lists
+  "1)" --------------> ordered lists
+  "|" ---------------> table entries
+  "----(-)*" --------> divider
+  "====(=)*" --------> marks the rest of the document as a bibtex bibliography
+  "^^^^(^)*" --------> new page (on print)
+  "!+" --------------> new title
+  "{{<path>}}" ------> include external file, supports [.png, .jpeg, .jpg, .html]
+  "%%+" -------------> ignore rest of line (comments in file)
+
+ANYWHERE:
+  "((<footnote>))" --> footnote in line (will be in appendix as well)
+  "[[<reference>]]" -> reference key in the bibliography
+  "$<math>$" --------> in line math
+  "$$<math>$$" ------> new line (centered) math
+  "*<text>*" --------> italics
+  "**<text>**" ------> bold
+  "***<text>***" ----> underline
+  "****<text>****" --> monospace
+  "`<text>`" --------> monospace
+  "@@<header>@@" ----> links in document to that header (verbatim name)
+  "<< modifier >>" --> direct access to html parent element attribute settings
+  "<(0-9)+>" --------> spacer with specified pixel width
+  "@{text}{link}@" --> text with a hyperlink
+  "{<color>}<text>{<color>} --> make all contained text "color".
+
+USAGE:
+  It is recommended that this program be used as a command-line
+  utility. Place an alias of the following sort into the appropriate
+  shell initialization file:
+
+    alias html="python3 -m txt_to_html"
+
+  Then execute with no arguments to get usage instructions. From
+  code, the only externally provided function is called
+  `txt_to_html.parse_txt`, see `help` documentation for details.
+
+'''
 
 import os, time
-import regex
 
+# A mutable string class that prevents copying when passed as an 
+# argument. It is not perfectly efficient, as copies of pointers are
+# still made, but it's faster than passing large strings.
 class MutableString(str):
+    # Internally store the data as a list of characters.
     def __init__(self, data):
         if (type(data) != list):
             self.data = list(data)
         else:
             self.data = data
+    # Return the Python string representation.
     def __repr__(self):
         return "".join(self.data)
+    # Square-bracket access (as in list type)
     def __setitem__(self, index, value):
         self.data[index] = value
     def __getitem__(self, index):
@@ -58,6 +73,7 @@ class MutableString(str):
         return self.data[index]
     def __delitem__(self, index):
         del self.data[index]
+    # String-addition is list appending.
     def __add__(self, other):
         self.data.extend(list(other))
     def __len__(self):
@@ -86,7 +102,6 @@ DESCRIPTION = ""
 AA_BEGIN = "       - "
 AUTHORS_AND_AFFILIATION = [
     # ("Thomas Lux: https://www.linkedin.com/in/thomas-ch-lux", "thomas.ch.lux@gmail.com"),
-    # ("Thomas Lux: http://people.cs.vt.edu/~tchlux/", "tchlux@vt.edu"),
 ]
 
 RESOURCE_FOLDER = os.path.join(
@@ -418,6 +433,161 @@ NOTES = '''
 #                affiliations="", body="", bibliography="", 
 #                appendix="", notes="")
 
+
+# ====================================================================
+# 
+#                       regex C library
+# 
+# A fast regular expression matching code for Python, built on top of
+# the 'regex.c' library. The main function provided here is:
+# 
+#   regex_match(regex, string) -> (start, end) or None or RegexError.
+# 
+# Regex language can be found in 'regex.c' file.
+
+
+# Import ctypes for loading the underlying C regex library.
+import ctypes
+# --------------------------------------------------------------------
+#                 Darwin (macOS) / Linux (Ubuntu) import
+clib_bin = os.path.join(os.path.dirname(os.path.abspath(__file__)), "regex.so")
+clib_source = os.path.join(os.path.dirname(os.path.abspath(__file__)), "regex.c")
+# Import or compile the C file.
+try:
+    REGEX_CLIB = ctypes.CDLL(clib_bin)
+except:
+    # Configure for the compilation for the C code.
+    c_compiler = "cc"
+    compile_command = f"{c_compiler} -O3 -fPIC -shared -o '{clib_bin}' '{clib_source}'"
+    # Compile and import.
+    os.system(compile_command)
+    REGEX_CLIB = ctypes.CDLL(clib_bin)
+    # Clean up "global" variables.
+    del(c_compiler, compile_command)
+del(clib_bin, clib_source)
+# --------------------------------------------------------------------
+
+# Exception to raise when errors are reported by the regex library.
+class RegexError(Exception): pass
+
+# Given a regular expression in a Unix-like format, translate it to a
+# regular experssion that is (roughly) equivalent in the language of
+# the `regex.c` library.
+def translate_regex(regex, case_sensitive=True):
+    # Do substitutions that make the underlying regex implementation
+    # behave more like common existing regex packages.
+    if (len(regex) > 0):
+        # Add a ".*" to the front of the regex if the beginning of the
+        # string was not explicitly desired in the match pattern.
+        if (regex[0] == "^"): regex = regex[1:]
+        elif ((len(regex) < 2) or (regex[0] != ".") or (regex[1] != '*')): 
+            regex = ".*" + regex
+        # Add a "{.}" to the end of the regex if the end of the string
+        # was explicitly requested in the pattern.
+        if (regex[-1] == "$"): regex = regex[:-1] + "{.}"
+    # Replace all alphebetical characters with token sets that include
+    # all cases of that character.
+    if (not case_sensitive):
+        i = 0
+        in_literal = False
+        while (i < len(regex)):
+            # Check for the beginning of a token set.
+            if ((regex[i] == '[') and (not in_literal)):
+                in_literal = True
+                contains = set()
+                missing = set()
+            # Handle a currently-active token set.
+            elif (in_literal):
+                # Check for the end of this token set.
+                if (regex[i] == ']'):
+                    in_literal = False
+                    # Add all the missing characters to this token set.
+                    missing = ''.join(sorted(missing.difference(contains)))
+                    regex = regex[:i] + missing + regex[i:]
+                    # Increment i appropriately.
+                    i += len(missing)-1
+                # Add the paired-case if we see a cased character.
+                elif (regex[i].isalpha()):
+                    contains.add(regex[i])
+                    if (regex[i].islower()):
+                        missing.add(regex[i].upper())
+                    else:
+                        missing.add(regex[i].lower())
+            # Otherwise replace this single character with a token set.
+            elif (regex[i].isalpha()):
+                if (regex[i].islower()):
+                    token_set = f'[{regex[i]}{regex[i].upper()}]'
+                else:
+                    token_set = f'[{regex[i]}{regex[i].lower()}]'
+                regex = regex[:i] + token_set + regex[i+1:]
+                i += len(token_set)-1
+            # Increment to the next token.
+            i += 1
+    # Return the now-prepared regular expression.
+    return regex
+
+# Translate 'start' and 'end' values that are returned by the `regex.c`
+# library, raising appropriate errors as defined by the library.
+def translate_return_values(regex, start, end):
+    # Return appropriately (handling error flags).
+    if (start >= 0): return (start, end)
+    elif (start < 0):
+        if (end == 0): return None # no match found
+        elif (end == -1): return (0, 0) # empty regular expression
+        elif ((start == -1) and (end == -5)): return None  # empty string
+        elif (end < -1): # error code provided by C
+            err = f"Invalid regular expression (code {-end})"
+            if (start < -1):
+                start -= sum(1 for c in str(regex,"utf-8") if c in "\n\t\r\0")
+                err += f", error at position {-start-1}.\n"
+                err += f"  {str([regex])[1:-1]}\n"
+                err += f"  {(-start)*' '}^"
+            else: err += "."
+            raise(RegexError(err))
+
+# Find a match for the given regex in string.
+# 
+#   match(regex, string) -> (start, end) or None or RegexError,
+# 
+# where "regex" is a string defining a regular expression and "string"
+# is a string to be searched against. The function will return None
+# if there is no match found. If a match is found, a tuple with
+# integers "start" (inclusive index) and "end" (exclusive index) will
+# be returned. If there is a problem with the regular expression,
+# a RegexError will be raised.
+#
+# Some substitutions are made before passing the regular expressions
+# "regex" to the "match" function in 'regex.c'. These substitutions
+# include:
+#
+#  - If "^" is at the beginning of "regex", it will be removed (because
+#    the underlying library implicitly assumes beginning-of-string.
+#  - If no "^" is placed at the beginning of "regex", then ".*" will
+#    be appened to the beginning of "regex" to behave like other 
+#    regular expression libraries.
+#  - If "$" is the last character of "regex", it will be substituted
+#    with "{.}", the appropriate pattern for end-of-string matches.
+# 
+def regex_match(regex, string, **translate_kwargs):
+    # Translate the regular expression to expected syntax.
+    regex = translate_regex(regex, **translate_kwargs)
+    # Call the C utillity.
+    #   initialize memory storage for the start and end of a match
+    start = ctypes.c_int()
+    end = ctypes.c_int()
+    #   convert strings into character arrays
+    if (type(regex) == str): regex = regex.encode("utf-8")
+    if (type(string) == str): string = string.encode("utf-8")
+    c_regex = ctypes.c_char_p(regex);
+    c_string = ctypes.c_char_p(string);
+    #   execute the C function
+    REGEX_CLIB.match(c_regex, c_string, ctypes.byref(start), ctypes.byref(end))
+    del(c_regex, c_string, string)
+    # Return the values from the C library (translating them appropriately)
+    return translate_return_values(regex, start.value, end.value)
+# ====================================================================
+
+
 # Object oriented recursive tree-grammar parsing code
 
 # ====================================================================
@@ -435,7 +605,7 @@ class MissingFile(Exception): pass
 class SyntaxError(Exception): pass
 class AuthorError(Exception): pass
 
-# Class for defining a syntax in text.
+# Base class for defining a syntax in text.
 class Syntax(list):
     start   = "^.*"     # The regex / string matching the start of this syntax
     end     = "^"+EOF   # The regex / string matching the end of this syntax
@@ -452,14 +622,15 @@ class Syntax(list):
     modifiable = True   # True if "Modifier" class content is allowed to update "pack"
     
     # Function for handling unprocessed strings. If this syntax is
-    # closed then an error is raised, otherwise the body is returned.
+    # supposed to be closed then an error is raised, otherwise the
+    # body is returned.
     def not_closed(self, body):
         if self.closed:
             raise(IncompleteSyntax(f"\n\n  {str(type(self))} {str(body)}"))
         else:
             return body, "", ""
 
-    # Function for packing text (to be overwritten by subclasses)
+    # Function for packing text into HTML (to be overwritten by subclasses)
     def pack(self, text):
         return text
 
@@ -484,14 +655,14 @@ class Syntax(list):
     # Returns the length of the match at the beginning of a string
     # that fits the "start" regular expression for this syntax.
     def starts(self, string):
-        match = regex.match(self.start, str(string))
+        match = regex_match(self.start, str(string))
         if (match is not None): return True, string[match[0]:match[1]-self.extra_s]
         else:                   return False, ""
 
     # Returns the length of the match at the beginning of a string
     # that fits the "end" regular expression for this syntax.
     def ends(self, string, start):
-        match = regex.match(self.end, str(string))
+        match = regex_match(self.end, str(string))
         if (match is not None):
             match = string[match[0]:match[1]-self.extra_e]
             if self.symmetric:
@@ -512,15 +683,15 @@ class Syntax(list):
         # Initialize a new copy of this class to hold contents (and keep match)
         body = type(self)([""])
         body.match = start
-        new_line = regex.match(ON_NEW_LINE, str(start)) is not None
-        escaped = self.allow_escape and (regex.match(ESCAPE_CHAR, str(start)) is not None)
+        new_line = regex_match(ON_NEW_LINE, str(start)) is not None
+        escaped = self.allow_escape and (regex_match(ESCAPE_CHAR, str(start)) is not None)
         if (escaped): start = start[:-1]
         # Initialize remaining length of string (>0 to allow matching "")
         remaining = max(1, len(string)-i)
         # Search the string for the start and end of this syntax
         while remaining > 0:
             # First, check to see if this syntax has ended
-            found, end = self.ends(string[i:MAX_REGEX_LEN], start)
+            found, end = self.ends(string[i:i+MAX_REGEX_LEN], start)
             if found:
                 # If this syntax has completed, return
                 if verbose: print(spacing, " End", TYPE(self), INLINE(body))
@@ -531,7 +702,7 @@ class Syntax(list):
                 if (syntax.line_start and (not new_line)): continue
                 if (syntax.escapable  and (escaped)): continue
                 # Search for the syntax at this part of the string
-                found, syntax_start = syntax.starts(string[i:MAX_REGEX_LEN])
+                found, syntax_start = syntax.starts(string[i:i+MAX_REGEX_LEN])
                 if found:
                     # Update the global variable if a note was found.
                     if (type(syntax) == Note):
@@ -542,11 +713,11 @@ class Syntax(list):
                     i = 0
                     body.append(contents)
                     # Record whether or not we are currently on a new line
-                    new_line = regex.match(ON_NEW_LINE, ends_on) is not None
+                    new_line = regex_match(ON_NEW_LINE, ends_on) is not None
                     new_line = new_line or (type(body[-1]) == NewLine)
                     # Record whether or not trailing character was ESCAPE_CHAR
                     escaped = self.allow_escape and (
-                        regex.match(ESCAPE_CHAR, str(ends_on)) is not None)
+                        regex_match(ESCAPE_CHAR, str(ends_on)) is not None)
                     break
             else:
                 # Add string contents appropriately
@@ -555,11 +726,11 @@ class Syntax(list):
                 else:
                     body[-1] += string[i]
                 # Record whether or not we are currently on a new line
-                new_line = regex.match(ON_NEW_LINE, string[i]) is not None
+                new_line = regex_match(ON_NEW_LINE, string[i]) is not None
                 # Allow for the escaping of the escape character
                 if not escaped:
                     # Record whether or not we are currently escaping
-                    escaped = self.allow_escape and (regex.match(ESCAPE_CHAR, string[i]) is not None)
+                    escaped = self.allow_escape and (regex_match(ESCAPE_CHAR, string[i]) is not None)
                     if (escaped): body[-1] = body[-1][:-1]
                 else: 
                     # Otherwise, reset the current escaped status
@@ -577,8 +748,6 @@ class Syntax(list):
                 LAST_PRINT_TIME = time.time()
         if verbose:
             print(spacing," End", TYPE(self), INLINE(body))
-            # print(spacing,body)
-            # print(spacing,string)
         # "string" completed without closing this syntax, handle appropraitely
         return self.not_closed(body)
      
@@ -1062,15 +1231,19 @@ def parse_header(raw_lines):
     return html_kwargs
 
 # Given a path to a text file, process that text file into an HTML
-# document format.
-def parse_txt(path_name, output_folder='.', verbose=True,
+# document format. Arguments should be self-explanatory.
+# 
+#  (verbose = 1) -> status updates only
+#  (verbose = 2) -> internal parsing updates included as well
+# 
+def parse_txt(path_name, output_folder='.', verbose=1,
               appendix=True, justify=False, use_local=USE_LOCAL,
               resource_folder=RESOURCE_FOLDER, show=True):
-    if verbose: print(f"Processing '{path_name}'...")
+    if (verbose > 0): print(f"Processing '{path_name}'...")
     with open(path_name) as f:
         raw_lines = f.readlines()
     if len(raw_lines) == 0: return ""
-    if verbose: print(f"Read text with {len(raw_lines)} lines.")
+    if (verbose > 0): print(f"Read text with {len(raw_lines)} lines.")
     # Initialize the document build keyword arguments
     html_kwargs = {"frontmatter_title":TITLE, "frontmatter_description":DESCRIPTION,
                    "title":TITLE, "description":DESCRIPTION,
@@ -1091,10 +1264,10 @@ def parse_txt(path_name, output_folder='.', verbose=True,
     processor.grammar = ALL_GRAMMAR
     global FOUND_NOTE; FOUND_NOTE = False
     # Process the text into a heirarchical syntax format
-    if verbose: print(f"Processing raw lines of text..")
+    if (verbose > 0): print(f"Processing raw lines of text..")
     # all_text = bytes(("".join(raw_lines) + EOF).encode("UTF-8"))
     all_text = MutableString("".join(raw_lines) + EOF)
-    body, _, _ = processor.process(all_text, 0, verbose=verbose)
+    body, _, _ = processor.process(all_text, 0, verbose=(verbose > 1))
     # Check for a bibliography at the end of the body
     if type(body[-1]) == Bibliography:
         html_kwargs["bibliography"] = body.pop(-1).render()
@@ -1103,56 +1276,31 @@ def parse_txt(path_name, output_folder='.', verbose=True,
         html_kwargs["appendix"] = ""
     # Remove justification if it is not desired.
     if not justify: html_kwargs["justify"] = ""
-    if verbose: print(f"Rendering the HTML document..")
+    if (verbose > 0): print(f"Rendering the HTML document..")
     # Render the heirarchical syntax into HTML text
-    rendered_body, _ = Body().render(body, verbose=verbose)
+    rendered_body, _ = Body().render(body, verbose=(verbose > 1))
     html_kwargs.update({"body":rendered_body})
     # Save the HTML document locally
-    if verbose: print(f"Saving the HTML document..")
+    if (verbose > 0): print(f"Saving the HTML document..")
     file_name = os.path.basename(path_name)
     output_file = os.path.join(os.path.abspath(output_folder), 
                                file_name + ".html")
     html = HTML(use_local, resource_folder).format( **html_kwargs )
     with open(output_file, "w") as f:
         print(html, file=f)
-    if verbose: print(f"Saved output in '{output_file}'.")
+    if (verbose > 0): print(f"Saved output in '{output_file}'.")
     # Show the resulting file in the webbrowser (if appropriate).
     if show: 
         import webbrowser
-        if verbose: print(f"Opening " + "file://" + output_file + " in default web browser.")
+        if (verbose > 0): print(f"Opening " + "file://" + output_file + " in default web browser.")
         webbrowser.open("file://" + output_file)
-    if verbose: print(f"Returning raw HTML as output.")
+    if (verbose > 0): print(f"Returning raw HTML as output.")
     # Return the HTML document (using formatted kwargs to insert text)
     return html
 
 
+DOC_STRING = __doc__
 
-# 2020-10-15 15:22:32
-# 
-################################################################################
-# if ("TableEntry" in str(type(self))):                                        #
-#     print()                                                                  #
-#     print(TYPE(self), INLINE(self.end), INLINE(string), match is not None) #
-#     exit()                                                                   #
-################################################################################
-
-
-# 2020-10-19 10:34:04
-# 
-###################################################
-# if (CHARS_PARSED > 100000): return body, "", "" #
-###################################################
-
-
-# 2020-10-19 10:34:08
-# 
-#####################
-# CHARS_PARSED += 1 #
-#####################
-
-
-# 2020-10-19 10:34:13
-# 
-##################
-# , CHARS_PARSED #
-##################
+# Define "all" the set of things that should be user-accessible 
+# outside this package.
+__all__ = [parse_txt, DOC_STRING]
