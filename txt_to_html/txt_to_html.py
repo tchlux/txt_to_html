@@ -1266,7 +1266,8 @@ def parse_txt(path_name, output_folder='.', verbose=1,
     # Process the text into a heirarchical syntax format
     if (verbose > 0): print(f"Processing raw lines of text..")
     # all_text = bytes(("".join(raw_lines) + EOF).encode("UTF-8"))
-    all_text = MutableString("".join(raw_lines) + EOF)
+    # all_text = MutableString("".join(raw_lines) + EOF)
+    all_text = "".join(raw_lines) + EOF
     body, _, _ = processor.process(all_text, 0, verbose=(verbose > 1))
     # Check for a bibliography at the end of the body
     if type(body[-1]) == Bibliography:
