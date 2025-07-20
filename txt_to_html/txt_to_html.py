@@ -294,7 +294,7 @@ def HTML(use_local=USE_LOCAL, resource_folder=RESOURCE_FOLDER):
     return html
 
 
-NOTES = '''
+NOTES = r'''
 <!--
      ============================================= 
           DISTILL PROPER USAGE AND FORMATTING      
@@ -607,7 +607,7 @@ class AuthorError(Exception): pass
 
 # Base class for defining a syntax in text.
 class Syntax(list):
-    start   = "^.*"     # The regex / string matching the start of this syntax
+    start   = "^."      # The regex / string matching the start of this syntax
     end     = "^"+EOF   # The regex / string matching the end of this syntax
     extra_s = 0         # The number of extra characters matched by "start" regex.
     extra_e = 0         # The number of extra characters matched by "end" regex.
@@ -697,13 +697,22 @@ class Syntax(list):
                 if verbose: print(spacing, " End", TYPE(self), INLINE(body))
                 return body, str(string[i:i+len(end)]), string[i+len(end):]
             # Check for the beginnings of any sub-syntaxes
-            for syntax in self.grammar:
+            for g, syntax in enumerate(self.grammar):
                 # Skip syntax that requires being at the start of a new line
                 if (syntax.line_start and (not new_line)): continue
                 if (syntax.escapable  and (escaped)): continue
                 # Search for the syntax at this part of the string
                 found, syntax_start = syntax.starts(string[i:i+MAX_REGEX_LEN])
                 if found:
+                    assert len(syntax_start) > 0, (
+                        "Expected nonzero length 'syntax_start'.\n\n"
+                        f" {g} - {type(syntax)}\n"
+                        f" Start: {repr(syntax.start)}\n"
+                        f" End:   {repr(syntax.end)}\n"
+                        f" Extra: {(syntax.extra_s, syntax.extra_e)}\n"
+                        f" Match:  {repr(syntax_start)}\n"
+                        f" String: {repr(string[i:i+MAX_REGEX_LEN])}"
+                    )
                     # Update the global variable if a note was found.
                     if (type(syntax) == Note):
                         global FOUND_NOTE; FOUND_NOTE = True
@@ -828,7 +837,7 @@ class Math(Syntax):
     def pack(self, text):
         # Pack with or without new line appropriately.
         if len(self.match) == 1:
-            return "\(" + text + "\)"
+            return r"\(" + text + r"\)"
         elif len(self.match) == 2:
             return "\n$$" + text + "$$"
 
